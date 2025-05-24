@@ -1,0 +1,27 @@
+[package]
+name = "blackjack"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+abi.workspace = true
+async-graphql.workspace = true
+linera-sdk.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+tokio = { workspace = true, features = ["rt", "sync"] }
+linera-sdk = { workspace = true, features = ["test", "wasmer"] }
+
+[dev-dependencies]
+linera-sdk = { workspace = true, features = ["test"] }
+
+[[bin]]
+name = "blackjack_contract"
+path = "src/contract.rs"
+
+[[bin]]
+name = "blackjack_service"
+path = "src/service.rs"
