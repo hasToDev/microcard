@@ -12,18 +12,18 @@ use linera_sdk::{
 
 use self::state::BlackjackState;
 
-pub struct MicrocardContract {
+pub struct BlackjackContract {
     state: BlackjackState,
     runtime: ContractRuntime<Self>,
 }
 
-linera_sdk::contract!(MicrocardContract);
+linera_sdk::contract!(BlackjackContract);
 
-impl WithContractAbi for MicrocardContract {
+impl WithContractAbi for BlackjackContract {
     type Abi = blackjack::BlackjackAbi;
 }
 
-impl Contract for MicrocardContract {
+impl Contract for BlackjackContract {
     type Message = ();
     type Parameters = ();
     type InstantiationArgument = u64;
@@ -33,7 +33,7 @@ impl Contract for MicrocardContract {
         let state = BlackjackState::load(runtime.root_view_storage_context())
             .await
             .expect("Failed to load state");
-        MicrocardContract { state, runtime }
+        BlackjackContract { state, runtime }
     }
 
     async fn instantiate(&mut self, argument: Self::InstantiationArgument) {
@@ -47,13 +47,17 @@ impl Contract for MicrocardContract {
             BlackjackOperation::ResetAnalytics { p } => {
                 //
             }
-            BlackjackOperation::ShuffleCard {} => {
-                let current_deck = self.state.deck_card.get_mut();
+            BlackjackOperation::ShuffleCard { hash } => {
+                let mut current_deck = self.state.deck_card.get_mut();
                 if current_deck.is_empty() {
                     self.state.deck_card.set(Deck::new());
+                    current_deck = self.state.deck_card.get_mut();
+                    current_deck.shuffle(hash, self.runtime.system_time().to_string());
+                    log::info!("\nNew Deck:\n{:?}", current_deck.cards);
                     return;
                 }
-                current_deck.shuffle(String::from("defined_hash"), self.runtime.system_time().to_string());
+                current_deck.shuffle(hash, self.runtime.system_time().to_string());
+                log::info!("\nShuffle Deck:\n{:?}", current_deck.cards);
             }
         }
     }

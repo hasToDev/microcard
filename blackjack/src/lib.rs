@@ -22,5 +22,5 @@ impl ServiceAbi for BlackjackAbi {
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum BlackjackOperation {
     ResetAnalytics { p: Player },
-    ShuffleCard {},
+    ShuffleCard { hash: String },
 }
