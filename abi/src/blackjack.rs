@@ -2,9 +2,18 @@ use crate::deck::Deck;
 use crate::player_dealer::{Dealer, Player};
 use async_graphql::scalar;
 use async_graphql_derive::SimpleObject;
+use linera_sdk::linera_base_types::ChannelName;
 use serde::{Deserialize, Serialize};
 
-const MAX_BLACKJACK_PLAYERS: usize = 3;
+/// Maximum number of players allowed in a Blackjack game.
+pub const MAX_BLACKJACK_PLAYERS: usize = 3;
+
+/// The channel name the application uses for cross-chain messages about game event.
+const BLACKJACK_EVENT_NAME: &[u8] = b"blackjack";
+
+pub fn blackjack_channel() -> ChannelName {
+    ChannelName::from(BLACKJACK_EVENT_NAME.to_vec())
+}
 
 scalar!(BlackjackStatus);
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize)]
@@ -14,6 +23,14 @@ pub enum BlackjackStatus {
     PlayerTurn = 1,
     DealerTurn = 2,
     Ended = 3,
+}
+
+scalar!(PlayChainStatus);
+#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize)]
+#[repr(u8)]
+pub enum PlayChainStatus {
+    AddNew = 0,
+    Update = 1,
 }
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject)]

@@ -6,9 +6,9 @@ use std::sync::Arc;
 
 use abi::deck::Deck;
 use async_graphql::{EmptySubscription, Object, Schema};
-use linera_sdk::{graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
-
 use blackjack::BlackjackOperation;
+use linera_sdk::linera_base_types::ChainId;
+use linera_sdk::{graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
 
 use self::state::BlackjackState;
 
@@ -51,6 +51,7 @@ impl Service for BlackjackService {
     }
 }
 
+#[allow(dead_code)]
 struct QueryRoot {
     state: Arc<BlackjackState>,
     runtime: Arc<ServiceRuntime<BlackjackService>>,
@@ -58,10 +59,10 @@ struct QueryRoot {
 
 #[Object]
 impl QueryRoot {
-    async fn value(&self) -> &u64 {
-        &self.state.value.get()
-    }
     async fn get_deck(&self) -> Deck {
         self.state.deck_card.get().clone()
+    }
+    async fn get_play_chains(&self) -> Vec<ChainId> {
+        self.state.play_chain_status.indices().await.unwrap_or_default()
     }
 }

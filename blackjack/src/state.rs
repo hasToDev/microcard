@@ -1,10 +1,16 @@
 use abi::deck::Deck;
-use linera_sdk::views::{linera_views, RegisterView, RootView, ViewStorageContext};
+use linera_sdk::linera_base_types::ChainId;
+use linera_sdk::views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext};
 
 #[derive(RootView, async_graphql::SimpleObject)]
 #[view(context = "ViewStorageContext")]
 pub struct BlackjackState {
     pub value: RegisterView<u64>,
+    // All Chain
+    pub blackjack_token: RegisterView<u64>,
+    // Public Chain
+    pub play_chain_set: MapView<u8, Vec<ChainId>>,
+    pub play_chain_status: MapView<ChainId, u8>,
+    // Play Chain
     pub deck_card: RegisterView<Deck>,
-    // Add fields here.
 }
