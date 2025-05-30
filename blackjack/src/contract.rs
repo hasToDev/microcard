@@ -88,9 +88,11 @@ impl Contract for BlackjackContract {
             // * Play Chain
             BlackjackMessage::Subscribe => {
                 self.runtime.subscribe(message_id.chain_id, blackjack_channel());
+                log::info!("\nUser {:?} subscribe to Play Chain {:?}\n", message_id.chain_id, self.runtime.chain_id());
             }
             BlackjackMessage::Unsubscribe => {
                 self.runtime.unsubscribe(message_id.chain_id, blackjack_channel());
+                log::info!("\nUser {:?} unsubscribe from Play Chain {:?}\n", message_id.chain_id, self.runtime.chain_id());
             }
             // * Public Chain
             BlackjackMessage::FindPlayChain => {
@@ -141,6 +143,7 @@ impl BlackjackContract {
             self.state.user_status.set(UserStatus::PlayChainFound);
             self.state.find_play_chain_retry.set(0);
             self.state.user_play_chain.set(vec![chain]);
+            self.message_manager(chain, BlackjackMessage::Subscribe);
             return;
         }
 
