@@ -33,6 +33,17 @@ pub enum PlayChainStatus {
     Update = 1,
 }
 
+scalar!(UserStatus);
+#[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize)]
+#[repr(u8)]
+pub enum UserStatus {
+    #[default]
+    Idle = 0,
+    FindPlayChain = 1,
+    PlayChainFound = 2,
+    PlayChainUnavailable = 3,
+}
+
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject)]
 pub struct BlackjackGame {
     pub dealer: Dealer,

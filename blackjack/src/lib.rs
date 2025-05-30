@@ -21,8 +21,8 @@ impl ServiceAbi for BlackjackAbi {
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum BlackjackOperation {
     // * Operation on User Chain
-    Subscribe { chain_id: ChainId },
-    Unsubscribe { chain_id: ChainId },
+    SubscribeTo { chain_id: ChainId },
+    UnsubscribeFrom { chain_id: ChainId },
     ShuffleCard { hash: String },
     FindPlayChain {},
     // * Operation on Public Chain
