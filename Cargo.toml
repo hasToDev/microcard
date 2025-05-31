@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "abi",
     "blackjack",
+    "house",
 ]
 
 [workspace.dependencies]
@@ -19,6 +20,7 @@ tokio = { version = "1.40", features = ["rt", "sync"] }
 
 abi = { path = "./abi" }
 blackjack = { path = "./blackjack" }
+house = { path = "./house" }
 
 [profile.release]
 debug = true
