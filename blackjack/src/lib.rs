@@ -1,3 +1,4 @@
+use abi::blackjack::BlackjackGame;
 use async_graphql::{Request, Response};
 use linera_sdk::linera_base_types::ChainId;
 use linera_sdk::{
@@ -20,21 +21,29 @@ impl ServiceAbi for BlackjackAbi {
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum BlackjackOperation {
-    // * Operation on User Chain
+    // * User Chain
     SubscribeTo { chain_id: ChainId },
     UnsubscribeFrom { chain_id: ChainId },
     ShuffleCard { hash: String },
     FindPlayChain {},
-    // * Operation on Public Chain
+    RequestTableSeat { seat_id: u8 },
+    // * Public Chain
     AddPlayChain { chain_id: ChainId },
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlackjackMessage {
+    // * User Chain
+    FindPlayChainResult { chain_id: Option<ChainId> },
+    RequestTableSeatResult { seat_id: u8, success: bool },
+    // * Play Chain
     Subscribe,
     Unsubscribe,
+    RequestTableSeat { seat_id: u8, balance: u64 },
+    // * Public Chain
     FindPlayChain,
-    FindPlayChainResult { chain_id: Option<ChainId> },
+    // * Channel Subscriber
+    GameState { game: BlackjackGame },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]

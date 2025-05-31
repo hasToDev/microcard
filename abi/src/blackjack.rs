@@ -4,6 +4,7 @@ use async_graphql::scalar;
 use async_graphql_derive::SimpleObject;
 use linera_sdk::linera_base_types::ChannelName;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Maximum number of players allowed in a Blackjack game.
 pub const MAX_BLACKJACK_PLAYERS: usize = 3;
@@ -16,19 +17,20 @@ pub fn blackjack_channel() -> ChannelName {
 }
 
 scalar!(BlackjackStatus);
-#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize)]
 #[repr(u8)]
 pub enum BlackjackStatus {
+    #[default]
     WaitingForBets = 0,
     PlayerTurn = 1,
     DealerTurn = 2,
     Ended = 3,
 }
 
-scalar!(PlayChainStatus);
+scalar!(MutationReason);
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize)]
 #[repr(u8)]
-pub enum PlayChainStatus {
+pub enum MutationReason {
     AddNew = 0,
     Update = 1,
 }
@@ -42,44 +44,52 @@ pub enum UserStatus {
     FindPlayChain = 1,
     PlayChainFound = 2,
     PlayChainUnavailable = 3,
+    RequestingTableSeat = 4,
+    RequestTableSeatFail = 5,
+    InGamePlay = 6,
 }
 
-#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject)]
+#[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
 pub struct BlackjackGame {
     pub dealer: Dealer,
-    pub players: Vec<Player>,
+    pub players: HashMap<u8, Player>,
     pub deck: Deck,
     pub pot: u64,
     pub status: BlackjackStatus,
 }
 
 impl BlackjackGame {
-    pub fn new(players: Vec<Player>) -> Result<Self, String> {
-        if players.len() > MAX_BLACKJACK_PLAYERS {
-            return Err(format!("Maximum of {} players allowed in Blackjack.", MAX_BLACKJACK_PLAYERS));
-        }
-
-        Ok(BlackjackGame {
+    pub fn new() -> Self {
+        BlackjackGame {
             dealer: Dealer { hand: vec![] },
-            players,
+            players: HashMap::new(),
             deck: Deck::new(),
             pot: 0,
             status: BlackjackStatus::WaitingForBets,
-        })
+        }
     }
 
-    pub fn add_player(&mut self, player: Player) -> Result<(), String> {
-        if self.players.len() >= MAX_BLACKJACK_PLAYERS {
-            return Err(format!("Maximum of {} Blackjack players reached.", MAX_BLACKJACK_PLAYERS));
-        }
-        self.players.push(player);
-        Ok(())
+    pub fn is_seat_taken(&self, seat_id: u8) -> bool {
+        self.players.contains_key(&seat_id)
     }
 
-    pub fn remove_player(&mut self, index: usize) -> Result<Player, String> {
-        if index >= self.players.len() {
-            return Err("Invalid Blackjack player index.".to_string());
+    pub fn register_player(&mut self, seat_id: u8, player: Player) {
+        self.players.insert(seat_id, player);
+    }
+
+    pub fn remove_player(&mut self, seat_id: u8) {
+        if self.players.contains_key(&seat_id) {
+            self.players.remove(&seat_id).unwrap();
         }
-        Ok(self.players.remove(index))
+    }
+
+    pub fn data_for_channel(&self) -> Self {
+        BlackjackGame {
+            dealer: Dealer::empty(),
+            players: self.players.clone(),
+            deck: Deck::empty(),
+            pot: self.pot,
+            status: self.status.clone(),
+        }
     }
 }

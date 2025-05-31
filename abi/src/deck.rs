@@ -19,8 +19,8 @@ use serde::{Deserialize, Serialize};
 /// 40 = Ace, 41-49 = Rank 2 - Rank 10,
 /// 50 = Jack, 51 = Queen, 52 = King
 pub const CARD_DECKS: [u8; 52] = [
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
-    37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52,
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
+    42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52,
 ];
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject)]
@@ -30,9 +30,11 @@ pub struct Deck {
 
 impl Deck {
     pub fn new() -> Self {
-        Deck {
-            cards: Vec::from(CARD_DECKS),
-        }
+        Deck { cards: Vec::from(CARD_DECKS) }
+    }
+
+    pub fn empty() -> Self {
+        Deck { cards: vec![] }
     }
 
     pub fn shuffle(&mut self, hash: String, timestamp: String) {
