@@ -7,6 +7,7 @@ use abi::blackjack::{blackjack_channel, MutationReason, UserStatus, MAX_BLACKJAC
 use abi::deck::Deck;
 use abi::player_dealer::Player;
 use abi::random::get_random_value;
+use bankroll::{BankrollOperation, BankrollResponse};
 use blackjack::{BlackjackMessage, BlackjackOperation, BlackjackParameters};
 use linera_sdk::linera_base_types::{ChainId, MessageId};
 use linera_sdk::{
@@ -89,6 +90,18 @@ impl Contract for BlackjackContract {
                 let play_chain_id = self.state.user_play_chain.get().first().unwrap();
                 self.message_manager(*play_chain_id, BlackjackMessage::RequestTableSeat { seat_id, balance });
                 self.state.user_status.set(UserStatus::RequestingTableSeat);
+            }
+            BlackjackOperation::GetBalance {} => {
+                log::info!("BlackjackOperation::GetBalance");
+                let owner = self.runtime.application_id().into();
+                let bankroll_app_id = self.runtime.application_parameters().bankroll;
+                let response = self.runtime.call_application(true, bankroll_app_id, &BankrollOperation::Balance { owner });
+                match response {
+                    BankrollResponse::Balance(balance) => {
+                        log::info!("Current Balance is {:?}", balance);
+                    }
+                    response => panic!("Unexpected response from Bankroll application: {response:?}"),
+                }
             }
             // * Public Chain
             BlackjackOperation::AddPlayChain { chain_id } => {

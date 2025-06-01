@@ -1,5 +1,5 @@
 [package]
-name = "house"
+name = "bankroll"
 version = "0.1.0"
 edition = "2021"
 
@@ -20,10 +20,10 @@ linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 linera-sdk = { workspace = true, features = ["test"] }
 
 [[bin]]
-name = "house_contract"
+name = "bankroll_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "house_service"
+name = "bankroll_service"
 path = "src/service.rs"
 

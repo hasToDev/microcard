@@ -1,12 +1,14 @@
 use abi::blackjack::BlackjackGame;
 use async_graphql::{Request, Response};
-use linera_sdk::linera_base_types::ChainId;
+use bankroll::BankrollAbi;
+use linera_sdk::linera_base_types::{ApplicationId, ChainId};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{ContractAbi, ServiceAbi},
 };
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Deserialize, Serialize)]
 pub struct BlackjackAbi;
 
 impl ContractAbi for BlackjackAbi {
@@ -27,6 +29,7 @@ pub enum BlackjackOperation {
     ShuffleCard { hash: String },
     FindPlayChain {},
     RequestTableSeat { seat_id: u8 },
+    GetBalance {},
     // * Public Chain
     AddPlayChain { chain_id: ChainId },
 }
@@ -46,7 +49,8 @@ pub enum BlackjackMessage {
     GameState { game: BlackjackGame },
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlackjackParameters {
     pub public_chains: Vec<ChainId>,
+    pub bankroll: ApplicationId<BankrollAbi>,
 }

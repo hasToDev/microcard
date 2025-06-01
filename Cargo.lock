@@ -403,6 +403,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bankroll"
+version = "0.1.0"
+dependencies = [
+ "abi",
+ "async-graphql",
+ "futures",
+ "linera-sdk",
+ "log",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -466,6 +480,7 @@ version = "0.1.0"
 dependencies = [
  "abi",
  "async-graphql",
+ "bankroll",
  "futures",
  "linera-sdk",
  "log",
@@ -1714,20 +1729,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest",
-]
-
-[[package]]
-name = "house"
-version = "0.1.0"
-dependencies = [
- "abi",
- "async-graphql",
- "futures",
- "linera-sdk",
- "log",
- "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
