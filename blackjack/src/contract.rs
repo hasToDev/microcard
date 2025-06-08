@@ -4,7 +4,6 @@ mod state;
 
 use self::state::BlackjackState;
 use abi::blackjack::{blackjack_channel, MutationReason, UserStatus, MAX_BLACKJACK_PLAYERS};
-use abi::chipset::calculate_chip_set;
 use abi::deck::Deck;
 use abi::player_dealer::Player;
 use abi::random::get_random_value;
@@ -90,7 +89,7 @@ impl Contract for BlackjackContract {
                     panic!("user already in game, can't request new seat");
                 }
 
-                let balance = *self.state.player_balance.get();
+                let balance = self.state.profile.get().balance;
                 let play_chain_id = self.state.user_play_chain.get().first().unwrap();
                 self.message_manager(*play_chain_id, BlackjackMessage::RequestTableSeat { seat_id, balance });
                 self.state.user_status.set(UserStatus::RequestingTableSeat);
@@ -115,8 +114,9 @@ impl Contract for BlackjackContract {
             BlackjackMessage::FindPlayChainResult { chain_id } => {
                 if self.process_find_play_chain_result(message_id, chain_id) {
                     let balance = self.get_bankroll_balance();
-                    self.state.player_balance.set(balance);
-                    self.state.player_chipset.set(calculate_chip_set(balance));
+                    let profile = self.state.profile.get_mut();
+                    profile.update_balance(balance);
+                    profile.calculate_chipset();
                 }
             }
             BlackjackMessage::RequestTableSeatResult { seat_id, success } => {
@@ -232,12 +232,15 @@ impl BlackjackContract {
         false
     }
     fn add_user_to_new_game(&mut self, seat_id: u8) {
-        let balance = *self.state.player_balance.get();
+        let balance = self.state.profile.get().balance;
         let chain_id = self.runtime.chain_id();
-        self.state.player.insert(&seat_id, Player::new(seat_id, balance, chain_id)).unwrap_or_else(|_| {
-            panic!("Failed to update Player for {:?} on add_user_to_new_game", chain_id);
-        });
-        self.state.player_seat.set(seat_id);
+        self.state
+            .player_seat_map
+            .insert(&seat_id, Player::new(seat_id, balance, chain_id))
+            .unwrap_or_else(|_| {
+                panic!("Failed to update Player Seat Map for {:?} on add_user_to_new_game", chain_id);
+            });
+        self.state.profile.get_mut().update_seat(seat_id);
         self.state.user_status.set(UserStatus::InGamePlay);
     }
     // * Play Chain
