@@ -4,12 +4,13 @@ mod state;
 
 use self::state::BlackjackState;
 use abi::blackjack::{blackjack_channel, MutationReason, UserStatus, MAX_BLACKJACK_PLAYERS};
+use abi::chipset::calculate_chip_set;
 use abi::deck::Deck;
 use abi::player_dealer::Player;
 use abi::random::get_random_value;
 use bankroll::{BankrollOperation, BankrollResponse};
 use blackjack::{BlackjackMessage, BlackjackOperation, BlackjackParameters};
-use linera_sdk::linera_base_types::{ChainId, MessageId};
+use linera_sdk::linera_base_types::{Amount, ChainId, MessageId};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
@@ -85,23 +86,19 @@ impl Contract for BlackjackContract {
                     panic!("still waiting response from previous RequestTableSeat");
                 }
 
-                // TODO: get the actual user Blackjack token balance, for now this is just a dummy value
-                let balance: u64 = 10_000;
+                if self.state.user_status.get().eq(&UserStatus::InGamePlay) {
+                    panic!("user already in game, can't request new seat");
+                }
+
+                let balance = *self.state.player_balance.get();
                 let play_chain_id = self.state.user_play_chain.get().first().unwrap();
                 self.message_manager(*play_chain_id, BlackjackMessage::RequestTableSeat { seat_id, balance });
                 self.state.user_status.set(UserStatus::RequestingTableSeat);
             }
             BlackjackOperation::GetBalance {} => {
                 log::info!("BlackjackOperation::GetBalance");
-                let owner = self.runtime.application_id().into();
-                let bankroll_app_id = self.runtime.application_parameters().bankroll;
-                let response = self.runtime.call_application(true, bankroll_app_id, &BankrollOperation::Balance { owner });
-                match response {
-                    BankrollResponse::Balance(balance) => {
-                        log::info!("Current Balance is {:?}", balance);
-                    }
-                    response => panic!("Unexpected response from Bankroll application: {response:?}"),
-                }
+                let balance = self.get_bankroll_balance();
+                log::info!("Current Balance is {:?}", balance);
             }
             // * Public Chain
             BlackjackOperation::AddPlayChain { chain_id } => {
@@ -116,7 +113,11 @@ impl Contract for BlackjackContract {
         match message {
             // * User Chain
             BlackjackMessage::FindPlayChainResult { chain_id } => {
-                self.process_find_play_chain_result(message_id, chain_id);
+                if self.process_find_play_chain_result(message_id, chain_id) {
+                    let balance = self.get_bankroll_balance();
+                    self.state.player_balance.set(balance);
+                    self.state.player_chipset.set(calculate_chip_set(balance));
+                }
             }
             BlackjackMessage::RequestTableSeatResult { seat_id, success } => {
                 if success {
@@ -150,7 +151,7 @@ impl Contract for BlackjackContract {
             BlackjackMessage::RequestTableSeat { seat_id, balance } => {
                 if self.request_table_seat_manager(seat_id, balance, message_id).is_some() {
                     let game = self.state.game.get();
-                    self.channel_manager(BlackjackMessage::GameState { game: game.data_for_channel() })
+                    self.channel_manager(BlackjackMessage::ChannelGameState { game: game.data_for_channel() })
                 }
                 log::info!(
                     "\nUser {:?} RequestTableSeat to Play Chain {:?}\n",
@@ -159,8 +160,9 @@ impl Contract for BlackjackContract {
                 );
             }
             // * Channel Subscriber
-            BlackjackMessage::GameState { game } => {
+            BlackjackMessage::ChannelGameState { game } => {
                 log::info!("\nUser {:?} received new game state:\n {:?}", self.runtime.chain_id(), game);
+                self.state.channel_game_state.set(game);
             }
         }
     }
@@ -173,6 +175,16 @@ impl Contract for BlackjackContract {
 impl BlackjackContract {
     fn message_manager(&mut self, destination: ChainId, message: BlackjackMessage) {
         self.runtime.prepare_message(message).with_tracking().send_to(destination);
+    }
+
+    fn get_bankroll_balance(&mut self) -> Amount {
+        let owner = self.runtime.application_id().into();
+        let bankroll_app_id = self.runtime.application_parameters().bankroll;
+        let response = self.runtime.call_application(true, bankroll_app_id, &BankrollOperation::Balance { owner });
+        match response {
+            BankrollResponse::Balance(balance) => balance,
+            response => panic!("Unexpected response from Bankroll application: {response:?}"),
+        }
     }
 
     // * User Chain
@@ -189,7 +201,7 @@ impl BlackjackContract {
             panic!("unable to find public chain");
         })
     }
-    fn process_find_play_chain_result(&mut self, message_id: MessageId, chain_id: Option<ChainId>) {
+    fn process_find_play_chain_result(&mut self, message_id: MessageId, chain_id: Option<ChainId>) -> bool {
         if let Some(chain) = chain_id {
             log::info!(
                 "\nFindPlayChain Result Received at {:?} from: {:?}\n",
@@ -201,7 +213,7 @@ impl BlackjackContract {
             self.state.find_play_chain_retry.set(0);
             self.state.user_play_chain.set(vec![chain]);
             self.message_manager(chain, BlackjackMessage::Subscribe);
-            return;
+            return true;
         }
 
         let retry_count = *self.state.find_play_chain_retry.get();
@@ -210,17 +222,17 @@ impl BlackjackContract {
             self.state.user_status.set(UserStatus::PlayChainUnavailable);
             self.state.find_play_chain_retry.set(0);
             self.state.user_play_chain.get_mut().clear();
-            return;
+            return false;
         }
 
         log::info!("Retrying FindPlayChain!");
         let next_chain_id = self.get_public_chain();
         self.state.find_play_chain_retry.set(retry_count.saturating_add(1));
         self.message_manager(next_chain_id, BlackjackMessage::FindPlayChain);
+        false
     }
     fn add_user_to_new_game(&mut self, seat_id: u8) {
-        // TODO: get the actual user Blackjack token balance, for now this is just a dummy value
-        let balance: u64 = 10_000;
+        let balance = *self.state.player_balance.get();
         let chain_id = self.runtime.chain_id();
         self.state.player.insert(&seat_id, Player::new(seat_id, balance, chain_id)).unwrap_or_else(|_| {
             panic!("Failed to update Player for {:?} on add_user_to_new_game", chain_id);
@@ -232,7 +244,7 @@ impl BlackjackContract {
     fn channel_manager(&mut self, message: BlackjackMessage) {
         self.runtime.prepare_message(message).with_tracking().send_to(blackjack_channel());
     }
-    fn request_table_seat_manager(&mut self, seat_id: u8, balance: u64, message_id: MessageId) -> Option<()> {
+    fn request_table_seat_manager(&mut self, seat_id: u8, balance: Amount, message_id: MessageId) -> Option<()> {
         let game = self.state.game.get_mut();
 
         if game.is_seat_taken(seat_id) {

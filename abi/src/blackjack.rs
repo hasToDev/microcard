@@ -51,20 +51,24 @@ pub enum UserStatus {
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
 pub struct BlackjackGame {
+    pub sequence: u64,
     pub dealer: Dealer,
     pub players: HashMap<u8, Player>,
     pub deck: Deck,
     pub pot: u64,
+    pub active_seat: u8,
     pub status: BlackjackStatus,
 }
 
 impl BlackjackGame {
     pub fn new() -> Self {
         BlackjackGame {
+            sequence: 0,
             dealer: Dealer { hand: vec![] },
             players: HashMap::new(),
             deck: Deck::new(),
             pot: 0,
+            active_seat: 0,
             status: BlackjackStatus::WaitingForBets,
         }
     }
@@ -85,10 +89,12 @@ impl BlackjackGame {
 
     pub fn data_for_channel(&self) -> Self {
         BlackjackGame {
+            sequence: self.sequence,
             dealer: Dealer::empty(),
             players: self.players.clone(),
             deck: Deck::empty(),
             pot: self.pot,
+            active_seat: self.active_seat,
             status: self.status.clone(),
         }
     }

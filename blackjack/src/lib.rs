@@ -1,7 +1,7 @@
 use abi::blackjack::BlackjackGame;
 use async_graphql::{Request, Response};
 use bankroll::BankrollAbi;
-use linera_sdk::linera_base_types::{ApplicationId, ChainId};
+use linera_sdk::linera_base_types::{Amount, ApplicationId, ChainId};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{ContractAbi, ServiceAbi},
@@ -42,11 +42,11 @@ pub enum BlackjackMessage {
     // * Play Chain
     Subscribe,
     Unsubscribe,
-    RequestTableSeat { seat_id: u8, balance: u64 },
+    RequestTableSeat { seat_id: u8, balance: Amount },
     // * Public Chain
     FindPlayChain,
     // * Channel Subscriber
-    GameState { game: BlackjackGame },
+    ChannelGameState { game: BlackjackGame },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

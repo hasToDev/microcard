@@ -1,19 +1,19 @@
 use async_graphql_derive::{InputObject, SimpleObject};
-use linera_sdk::linera_base_types::ChainId;
+use linera_sdk::linera_base_types::{Amount, ChainId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject, InputObject)]
 pub struct Player {
     pub seat_id: u8,
     pub bet: u64,
-    pub balance: u64,
+    pub balance: Amount,
     pub hand: Vec<u8>,
     pub chain_id: ChainId,
     pub current_player: bool,
 }
 
 impl Player {
-    pub fn new(seat_id: u8, balance: u64, chain_id: ChainId) -> Self {
+    pub fn new(seat_id: u8, balance: Amount, chain_id: ChainId) -> Self {
         Player {
             seat_id,
             bet: 0,
