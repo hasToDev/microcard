@@ -73,7 +73,7 @@ impl Contract for BlackjackContract {
                 self.message_manager(chain_id, BlackjackMessage::FindPlayChain);
             }
             BlackjackOperation::RequestTableSeat { seat_id } => {
-                if self.state.user_play_chain.get().is_empty() {
+                if self.state.user_play_chain.get().is_none() {
                     panic!("no Play Chain found");
                 }
 
@@ -90,8 +90,8 @@ impl Contract for BlackjackContract {
                 }
 
                 let balance = self.state.profile.get().balance;
-                let play_chain_id = self.state.user_play_chain.get().first().unwrap();
-                self.message_manager(*play_chain_id, BlackjackMessage::RequestTableSeat { seat_id, balance });
+                let play_chain_id = self.state.user_play_chain.get().unwrap();
+                self.message_manager(play_chain_id, BlackjackMessage::RequestTableSeat { seat_id, balance });
                 self.state.user_status.set(UserStatus::RequestingTableSeat);
             }
             BlackjackOperation::GetBalance {} => {
@@ -211,7 +211,7 @@ impl BlackjackContract {
             log::info!("Available Chain ID {:?}", chain);
             self.state.user_status.set(UserStatus::PlayChainFound);
             self.state.find_play_chain_retry.set(0);
-            self.state.user_play_chain.set(vec![chain]);
+            self.state.user_play_chain.set(Some(chain));
             self.message_manager(chain, BlackjackMessage::Subscribe);
             return true;
         }
@@ -221,7 +221,7 @@ impl BlackjackContract {
             log::info!("FindPlayChain Result Received : No Chain ID found!");
             self.state.user_status.set(UserStatus::PlayChainUnavailable);
             self.state.find_play_chain_retry.set(0);
-            self.state.user_play_chain.get_mut().clear();
+            self.state.user_play_chain.set(None);
             return false;
         }
 

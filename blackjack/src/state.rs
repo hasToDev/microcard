@@ -18,7 +18,7 @@ pub struct BlackjackState {
     pub profile: RegisterView<Profile>,
     pub player_seat_map: MapView<u8, Player>,
     pub user_status: RegisterView<UserStatus>,
-    pub user_play_chain: RegisterView<Vec<ChainId>>,
+    pub user_play_chain: RegisterView<Option<ChainId>>,
     pub find_play_chain_retry: RegisterView<u8>,
     pub channel_game_state: RegisterView<BlackjackGame>,
     // Play Chain
