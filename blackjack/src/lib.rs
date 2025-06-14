@@ -30,6 +30,8 @@ pub enum BlackjackOperation {
     FindPlayChain {},
     RequestTableSeat { seat_id: u8 },
     GetBalance {},
+    Bet { amount: Amount },
+    Deal {},
     // * Public Chain
     AddPlayChain { chain_id: ChainId },
 }

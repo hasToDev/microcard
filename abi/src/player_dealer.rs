@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject, InputObject)]
 pub struct Player {
-    pub seat_id: u8,
-    pub bet: u64,
+    pub seat_id: u8, // seat_id 0 is for a single player mode
+    pub bet: Amount,
     pub balance: Amount,
     pub hand: Vec<u8>,
     pub chain_id: ChainId,
@@ -16,12 +16,20 @@ impl Player {
     pub fn new(seat_id: u8, balance: Amount, chain_id: ChainId) -> Self {
         Player {
             seat_id,
-            bet: 0,
+            bet: Amount::from_tokens(0),
             balance,
             hand: vec![],
             chain_id,
             current_player: false,
         }
+    }
+
+    pub fn update_bet(&mut self, amount: Amount) {
+        self.bet = amount
+    }
+
+    pub fn reset_bet(&mut self) {
+        self.bet = Amount::from_tokens(0)
     }
 }
 

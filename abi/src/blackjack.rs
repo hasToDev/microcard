@@ -2,7 +2,7 @@ use crate::deck::Deck;
 use crate::player_dealer::{Dealer, Player};
 use async_graphql::scalar;
 use async_graphql_derive::SimpleObject;
-use linera_sdk::linera_base_types::ChannelName;
+use linera_sdk::linera_base_types::{ChannelName, Timestamp};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -21,10 +21,11 @@ scalar!(BlackjackStatus);
 #[repr(u8)]
 pub enum BlackjackStatus {
     #[default]
-    WaitingForBets = 0,
-    PlayerTurn = 1,
-    DealerTurn = 2,
-    Ended = 3,
+    WaitingForPlayer = 0,
+    WaitingForBets = 1,
+    PlayerTurn = 2,
+    DealerTurn = 3,
+    Ended = 4,
 }
 
 scalar!(MutationReason);
@@ -46,7 +47,8 @@ pub enum UserStatus {
     PlayChainUnavailable = 3,
     RequestingTableSeat = 4,
     RequestTableSeatFail = 5,
-    InGamePlay = 6,
+    InMultiPlayerGame = 6,
+    InSinglePlayerGame = 7,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
@@ -58,6 +60,7 @@ pub struct BlackjackGame {
     pub pot: u64,
     pub active_seat: u8,
     pub status: BlackjackStatus,
+    pub time_limit: Timestamp,
 }
 
 impl BlackjackGame {
@@ -69,7 +72,8 @@ impl BlackjackGame {
             deck: Deck::new(),
             pot: 0,
             active_seat: 0,
-            status: BlackjackStatus::WaitingForBets,
+            status: BlackjackStatus::WaitingForPlayer,
+            time_limit: Timestamp::from(0),
         }
     }
 
@@ -96,6 +100,7 @@ impl BlackjackGame {
             pot: self.pot,
             active_seat: self.active_seat,
             status: self.status.clone(),
+            time_limit: self.time_limit,
         }
     }
 }

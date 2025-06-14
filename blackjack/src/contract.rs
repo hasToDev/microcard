@@ -3,7 +3,7 @@
 mod state;
 
 use self::state::BlackjackState;
-use abi::blackjack::{blackjack_channel, MutationReason, UserStatus, MAX_BLACKJACK_PLAYERS};
+use abi::blackjack::{blackjack_channel, BlackjackStatus, MutationReason, UserStatus, MAX_BLACKJACK_PLAYERS};
 use abi::deck::Deck;
 use abi::player_dealer::Player;
 use abi::random::get_random_value;
@@ -85,7 +85,7 @@ impl Contract for BlackjackContract {
                     panic!("still waiting response from previous RequestTableSeat");
                 }
 
-                if self.state.user_status.get().eq(&UserStatus::InGamePlay) {
+                if self.state.user_status.get().eq(&UserStatus::InMultiPlayerGame) {
                     panic!("user already in game, can't request new seat");
                 }
 
@@ -98,6 +98,24 @@ impl Contract for BlackjackContract {
                 log::info!("BlackjackOperation::GetBalance");
                 let balance = self.get_bankroll_balance();
                 log::info!("Current Balance is {:?}", balance);
+            }
+            BlackjackOperation::Bet { amount } => {
+                log::info!("BlackjackOperation::Bet");
+                match self.state.user_status.get() {
+                    UserStatus::InMultiPlayerGame => {
+                        self.multi_player_bet(amount).await;
+                    }
+                    UserStatus::InSinglePlayerGame => {
+                        // TODO: implement single player bet
+                    }
+                    _ => {
+                        panic!("Player not in any Single or MultiPlayerGame!");
+                    }
+                }
+            }
+            BlackjackOperation::Deal {} => {
+                log::info!("BlackjackOperation::Deal");
+                // TODO: implement deal for both single and multi player
             }
             // * Public Chain
             BlackjackOperation::AddPlayChain { chain_id } => {
@@ -241,7 +259,47 @@ impl BlackjackContract {
                 panic!("Failed to update Player Seat Map for {:?} on add_user_to_new_game", chain_id);
             });
         self.state.profile.get_mut().update_seat(seat_id);
-        self.state.user_status.set(UserStatus::InGamePlay);
+        self.state.user_status.set(UserStatus::InMultiPlayerGame);
+    }
+    async fn multi_player_bet(&mut self, amount: Amount) {
+        if self.state.channel_game_state.get().status.ne(&BlackjackStatus::WaitingForBets) {
+            panic!("game in play, waiting for next hands");
+        }
+        if self.state.profile.get().chipset.is_none() {
+            panic!("missing Chipset data for placing bet");
+        }
+
+        let user_profile = self.state.profile.get().clone();
+        let chipset = user_profile.chipset.unwrap();
+
+        if user_profile.seat.is_none() {
+            panic!("missing Player Seat ID");
+        }
+        if user_profile.balance.eq(&Amount::ZERO) || user_profile.balance.lt(&chipset.min_bet) {
+            panic!("not enough Player balance");
+        }
+        if amount.lt(&chipset.min_bet) {
+            panic!("minimum bet is {:?}", chipset.min_bet);
+        }
+        if amount.gt(&chipset.max_bet) {
+            panic!("maximum bet is {:?}", chipset.max_bet);
+        }
+
+        let seat_id = user_profile.seat.unwrap();
+
+        let player = self
+            .state
+            .player_seat_map
+            .get_mut(&seat_id)
+            .await
+            .unwrap_or_else(|_| {
+                panic!("Player not found!");
+            })
+            .unwrap_or_else(|| {
+                panic!("Player not found!");
+            });
+
+        player.update_bet(amount);
     }
     // * Play Chain
     fn channel_manager(&mut self, message: BlackjackMessage) {
