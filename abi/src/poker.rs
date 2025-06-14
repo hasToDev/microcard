@@ -45,7 +45,7 @@ impl PokerGame {
         Ok(PokerGame {
             dealer: Dealer { hand: vec![] },
             players,
-            deck: Deck::new(),
+            deck: Deck::empty(),
             community_cards: vec![],
             pot: 0,
             current_round: BettingRound::PreFlop,

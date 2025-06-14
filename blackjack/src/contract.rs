@@ -3,8 +3,8 @@
 mod state;
 
 use self::state::BlackjackState;
-use abi::blackjack::{blackjack_channel, BlackjackStatus, MutationReason, UserStatus, MAX_BLACKJACK_PLAYERS};
-use abi::deck::Deck;
+use abi::blackjack::{blackjack_channel, BlackjackGame, BlackjackStatus, MutationReason, UserStatus, MAX_BLACKJACK_PLAYERS};
+use abi::deck::{get_new_deck, Deck};
 use abi::player_dealer::Player;
 use abi::random::get_random_value;
 use bankroll::{BankrollOperation, BankrollResponse};
@@ -54,19 +54,8 @@ impl Contract for BlackjackContract {
             BlackjackOperation::UnsubscribeFrom { chain_id } => {
                 self.message_manager(chain_id, BlackjackMessage::Unsubscribe);
             }
-            BlackjackOperation::ShuffleCard { hash } => {
-                let mut current_deck = self.state.deck_card.get_mut();
-                if current_deck.is_empty() {
-                    self.state.deck_card.set(Deck::new());
-                    current_deck = self.state.deck_card.get_mut();
-                    current_deck.shuffle(hash, self.runtime.system_time().to_string());
-                    log::info!("\nNew Deck:\n{:?}", current_deck.cards);
-                    return;
-                }
-                current_deck.shuffle(hash, self.runtime.system_time().to_string());
-                log::info!("\nShuffle Deck:\n{:?}", current_deck.cards);
-            }
             BlackjackOperation::FindPlayChain {} => {
+                // TODO: make UserStatus check to prevent double calling FindPlayChain
                 let chain_id = self.get_public_chain();
                 self.state.user_status.set(UserStatus::FindPlayChain);
                 self.state.find_play_chain_retry.set(0);
@@ -117,6 +106,21 @@ impl Contract for BlackjackContract {
                 log::info!("BlackjackOperation::Deal");
                 // TODO: implement deal for both single and multi player
             }
+            BlackjackOperation::StartSinglePlayerGame {} => {
+                log::info!("BlackjackOperation::StartSinglePlayerGame");
+                match self.state.user_status.get() {
+                    UserStatus::Idle | UserStatus::PlayChainUnavailable => {
+                        self.state.user_status.set(UserStatus::InSinglePlayerGame);
+                        self.update_profile_balance_and_chipset();
+                        let mut blackjack_game = self.create_single_player_blackjack_game();
+                        blackjack_game.update_status(BlackjackStatus::WaitingForBets);
+                        self.state.single_player_game.set(blackjack_game);
+                    }
+                    current_status => {
+                        panic!("Unable to Start Single Player Game, user status is {:?}", current_status);
+                    }
+                }
+            }
             // * Public Chain
             BlackjackOperation::AddPlayChain { chain_id } => {
                 self.play_chain_manager(chain_id, 0, MutationReason::AddNew).await;
@@ -131,10 +135,7 @@ impl Contract for BlackjackContract {
             // * User Chain
             BlackjackMessage::FindPlayChainResult { chain_id } => {
                 if self.process_find_play_chain_result(message_id, chain_id) {
-                    let balance = self.get_bankroll_balance();
-                    let profile = self.state.profile.get_mut();
-                    profile.update_balance(balance);
-                    profile.calculate_chipset();
+                    self.update_profile_balance_and_chipset();
                 }
             }
             BlackjackMessage::RequestTableSeatResult { seat_id, success } => {
@@ -206,6 +207,23 @@ impl BlackjackContract {
     }
 
     // * User Chain
+    fn create_single_player_blackjack_game(&mut self) -> BlackjackGame {
+        let mut new_card_stack = get_new_deck(self.runtime.system_time().to_string());
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        BlackjackGame::new(Deck::with_cards(new_card_stack))
+    }
+    fn update_profile_balance_and_chipset(&mut self) {
+        let balance = self.get_bankroll_balance();
+        let profile = self.state.profile.get_mut();
+        profile.update_balance(balance);
+        profile.calculate_chipset();
+    }
     fn get_public_chain(&mut self) -> ChainId {
         let i = get_random_value(
             0,

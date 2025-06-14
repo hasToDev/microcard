@@ -26,12 +26,12 @@ pub enum BlackjackOperation {
     // * User Chain
     SubscribeTo { chain_id: ChainId },
     UnsubscribeFrom { chain_id: ChainId },
-    ShuffleCard { hash: String },
     FindPlayChain {},
     RequestTableSeat { seat_id: u8 },
     GetBalance {},
     Bet { amount: Amount },
     Deal {},
+    StartSinglePlayerGame {},
     // * Public Chain
     AddPlayChain { chain_id: ChainId },
 }

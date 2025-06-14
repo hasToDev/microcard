@@ -29,12 +29,12 @@ pub struct Deck {
 }
 
 impl Deck {
-    pub fn new() -> Self {
-        Deck { cards: Vec::from(CARD_DECKS) }
-    }
-
     pub fn empty() -> Self {
         Deck { cards: vec![] }
+    }
+
+    pub fn with_cards(cards: Vec<u8>) -> Self {
+        Deck { cards }
     }
 
     pub fn shuffle(&mut self, hash: String, timestamp: String) {
@@ -49,4 +49,16 @@ impl Deck {
     pub fn is_empty(&self) -> bool {
         self.cards.len() == 0
     }
+
+    pub fn add_cards(&mut self, new_set: &mut Vec<u8>, timestamp: String) {
+        self.cards.append(new_set);
+        self.cards
+            .shuffle(&mut get_custom_rng(timestamp.clone(), timestamp).expect("Failed to get custom rng").clone());
+    }
+}
+
+pub fn get_new_deck(timestamp: String) -> Vec<u8> {
+    let mut new_deck = Vec::from(CARD_DECKS);
+    new_deck.shuffle(&mut get_custom_rng(timestamp.clone(), timestamp).expect("Failed to get custom rng").clone());
+    new_deck
 }

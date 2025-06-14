@@ -1,3 +1,4 @@
+use crate::chipset_profile::Profile;
 use crate::deck::Deck;
 use crate::player_dealer::{Dealer, Player};
 use async_graphql::scalar;
@@ -52,6 +53,12 @@ pub enum UserStatus {
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
+pub struct GameData {
+    pub profile: Profile,
+    pub game: BlackjackGame,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
 pub struct BlackjackGame {
     pub sequence: u64,
     pub dealer: Dealer,
@@ -64,12 +71,12 @@ pub struct BlackjackGame {
 }
 
 impl BlackjackGame {
-    pub fn new() -> Self {
+    pub fn new(new_deck: Deck) -> Self {
         BlackjackGame {
             sequence: 0,
             dealer: Dealer { hand: vec![] },
             players: HashMap::new(),
-            deck: Deck::new(),
+            deck: new_deck,
             pot: 0,
             active_seat: 0,
             status: BlackjackStatus::WaitingForPlayer,
@@ -85,6 +92,10 @@ impl BlackjackGame {
         self.players.insert(seat_id, player);
     }
 
+    pub fn update_status(&mut self, new_status: BlackjackStatus) {
+        self.status = new_status;
+    }
+
     pub fn remove_player(&mut self, seat_id: u8) {
         if self.players.contains_key(&seat_id) {
             self.players.remove(&seat_id).unwrap();
@@ -94,7 +105,7 @@ impl BlackjackGame {
     pub fn data_for_channel(&self) -> Self {
         BlackjackGame {
             sequence: self.sequence,
-            dealer: Dealer::empty(),
+            dealer: Dealer::empty(), // TODO: hide dealer hand until BlackjackStatus::DealerTurn
             players: self.players.clone(),
             deck: Deck::empty(),
             pot: self.pot,
