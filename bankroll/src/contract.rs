@@ -2,14 +2,13 @@
 
 mod state;
 
-use bankroll::{BankrollOperation, BankrollResponse};
+use self::state::BankrollState;
+use bankroll::{BankrollOperation, BankrollParameters, BankrollResponse};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
     Contract, ContractRuntime,
 };
-
-use self::state::BankrollState;
 
 pub struct BankrollContract {
     state: BankrollState,
@@ -24,7 +23,7 @@ impl WithContractAbi for BankrollContract {
 
 impl Contract for BankrollContract {
     type Message = ();
-    type Parameters = ();
+    type Parameters = BankrollParameters;
     type InstantiationArgument = ();
     type EventValue = ();
 
@@ -33,13 +32,16 @@ impl Contract for BankrollContract {
         BankrollContract { state, runtime }
     }
 
-    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {}
+    async fn instantiate(&mut self, _argument: Self::InstantiationArgument) {
+        // validate that the application parameters were configured correctly.
+        self.runtime.application_parameters();
+    }
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
             BankrollOperation::Balance { owner } => {
                 log::info!("BankrollOperation::Balance request from  {:?}", owner);
-                let balance = self
+                let mut balance = self
                     .state
                     .accounts
                     .get(&owner)
@@ -48,6 +50,17 @@ impl Contract for BankrollContract {
                         panic!("unable to get {:?} balance", owner);
                     })
                     .unwrap_or_default();
+
+                let daily_bonus = self.state.daily_bonus.get_mut();
+                if daily_bonus.is_zero() {
+                    daily_bonus.update_bonus(self.runtime.application_parameters().bonus);
+                }
+                balance.saturating_add_assign(daily_bonus.claim_bonus(self.runtime.system_time()));
+
+                self.state.accounts.insert(&owner, balance).unwrap_or_else(|_| {
+                    panic!("unable to update {:?} balance", owner);
+                });
+
                 BankrollResponse::Balance(balance)
             }
         }

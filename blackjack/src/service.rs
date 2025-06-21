@@ -5,7 +5,8 @@ mod state;
 use std::sync::Arc;
 
 use self::state::BlackjackState;
-use abi::blackjack::GameData;
+use abi::blackjack::{GameData, UserStatus};
+use abi::chipset_profile::Profile;
 use abi::deck::Deck;
 use async_graphql::{EmptySubscription, Object, Schema};
 use blackjack::BlackjackOperation;
@@ -63,7 +64,6 @@ impl QueryRoot {
     async fn get_play_chains(&self) -> Vec<ChainId> {
         self.state.play_chain_status.indices().await.unwrap_or_default()
     }
-
     async fn single_player_data(&self) -> GameData {
         GameData {
             profile: self.state.profile.get().clone(),
@@ -75,5 +75,11 @@ impl QueryRoot {
             profile: self.state.profile.get().clone(),
             game: self.state.channel_game_state.get().data_for_channel(),
         }
+    }
+    async fn get_profile(&self) -> Profile {
+        self.state.profile.get().clone()
+    }
+    async fn get_user_status(&self) -> UserStatus {
+        self.state.user_status.get().clone()
     }
 }

@@ -5,7 +5,7 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Schema};
-use bankroll::BankrollOperation;
+use bankroll::{BankrollOperation, DailyBonus};
 use linera_sdk::{graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
 
 use self::state::BankrollState;
@@ -55,7 +55,7 @@ struct QueryRoot {
 
 #[Object]
 impl QueryRoot {
-    async fn get_value(&self) -> u64 {
-        *self.state.value.get()
+    async fn get_daily_bonus(&self) -> DailyBonus {
+        self.state.daily_bonus.get().clone()
     }
 }
