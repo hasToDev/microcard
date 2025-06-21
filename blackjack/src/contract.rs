@@ -92,10 +92,18 @@ impl Contract for BlackjackContract {
                 log::info!("BlackjackOperation::Bet");
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
-                        self.multi_player_bet(amount).await;
+                        if self.state.channel_game_state.get().status.ne(&BlackjackStatus::WaitingForBets) {
+                            panic!("game in play, not ready for placing bets, please wait for the next hands");
+                        }
+                        log::info!("Bet MultiPlayerGame");
+                        self.player_bet(amount).await;
                     }
                     UserStatus::InSinglePlayerGame => {
-                        // TODO: implement single player bet
+                        if self.state.single_player_game.get().status.ne(&BlackjackStatus::WaitingForBets) {
+                            panic!("game in play, not ready for placing bets, please wait for the next hands");
+                        }
+                        log::info!("Bet SinglePlayerGame");
+                        self.player_bet(amount).await;
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -110,11 +118,8 @@ impl Contract for BlackjackContract {
                 log::info!("BlackjackOperation::StartSinglePlayerGame");
                 match self.state.user_status.get() {
                     UserStatus::Idle | UserStatus::PlayChainUnavailable => {
-                        self.state.user_status.set(UserStatus::InSinglePlayerGame);
                         self.update_profile_balance_and_chipset();
-                        let mut blackjack_game = self.create_single_player_blackjack_game();
-                        blackjack_game.update_status(BlackjackStatus::WaitingForBets);
-                        self.state.single_player_game.set(blackjack_game);
+                        self.add_user_to_new_single_player_game();
                     }
                     current_status => {
                         panic!("Unable to Start Single Player Game, user status is {:?}", current_status);
@@ -140,7 +145,7 @@ impl Contract for BlackjackContract {
             }
             BlackjackMessage::RequestTableSeatResult { seat_id, success } => {
                 if success {
-                    self.add_user_to_new_game(seat_id);
+                    self.add_user_to_new_multi_player_game(seat_id);
                     log::info!("RequestTableSeatResult SUCCESS on {:?}!", message_id.chain_id);
                     return;
                 }
@@ -267,22 +272,36 @@ impl BlackjackContract {
         self.message_manager(next_chain_id, BlackjackMessage::FindPlayChain);
         false
     }
-    fn add_user_to_new_game(&mut self, seat_id: u8) {
+    fn add_user_to_new_single_player_game(&mut self) {
+        let balance = self.state.profile.get().balance;
+        let chain_id = self.runtime.chain_id();
+        let seat_id: u8 = 1;
+        let new_player = Player::new(seat_id, balance, chain_id);
+
+        self.state.player_seat_map.insert(&seat_id, new_player.clone()).unwrap_or_else(|_| {
+            panic!("Failed to update Player Seat Map for {:?} on add_user_to_new_single_player_game", chain_id);
+        });
+        self.state.user_status.set(UserStatus::InSinglePlayerGame);
+        self.state.profile.get_mut().update_seat(seat_id);
+
+        let mut blackjack_game = self.create_single_player_blackjack_game();
+        blackjack_game.update_status(BlackjackStatus::WaitingForBets);
+        blackjack_game.register_player(seat_id, new_player);
+        self.state.single_player_game.set(blackjack_game);
+    }
+    fn add_user_to_new_multi_player_game(&mut self, seat_id: u8) {
         let balance = self.state.profile.get().balance;
         let chain_id = self.runtime.chain_id();
         self.state
             .player_seat_map
             .insert(&seat_id, Player::new(seat_id, balance, chain_id))
             .unwrap_or_else(|_| {
-                panic!("Failed to update Player Seat Map for {:?} on add_user_to_new_game", chain_id);
+                panic!("Failed to update Player Seat Map for {:?} on add_user_to_new_multi_player_game", chain_id);
             });
         self.state.profile.get_mut().update_seat(seat_id);
         self.state.user_status.set(UserStatus::InMultiPlayerGame);
     }
-    async fn multi_player_bet(&mut self, amount: Amount) {
-        if self.state.channel_game_state.get().status.ne(&BlackjackStatus::WaitingForBets) {
-            panic!("game in play, waiting for next hands");
-        }
+    async fn player_bet(&mut self, amount: Amount) {
         if self.state.profile.get().chipset.is_none() {
             panic!("missing Chipset data for placing bet");
         }
