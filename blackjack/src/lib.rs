@@ -34,6 +34,8 @@ pub enum BlackjackOperation {
     StartSinglePlayerGame {},
     // * Public Chain
     AddPlayChain { chain_id: ChainId },
+    // * Master Chain
+    MintToken { chain_id: ChainId, amount: Amount },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -53,6 +55,7 @@ pub enum BlackjackMessage {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BlackjackParameters {
+    pub master_chain: ChainId,
     pub public_chains: Vec<ChainId>,
     pub bankroll: ApplicationId<BankrollAbi>,
 }

@@ -1,5 +1,5 @@
 use async_graphql::{Request, Response, SimpleObject};
-use linera_sdk::linera_base_types::{AccountOwner, Amount, Timestamp};
+use linera_sdk::linera_base_types::{AccountOwner, Amount, ChainId, Timestamp};
 use linera_sdk::{
     graphql::GraphQLMutationRoot,
     linera_base_types::{ContractAbi, ServiceAbi},
@@ -21,7 +21,16 @@ impl ServiceAbi for BankrollAbi {
 
 #[derive(Debug, Deserialize, Serialize, GraphQLMutationRoot)]
 pub enum BankrollOperation {
+    // * User Chain
     Balance { owner: AccountOwner },
+    // * Master Chain
+    MintToken { chain_id: ChainId, amount: Amount },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum BankrollMessage {
+    // * Public Chain
+    ReceivedToken { amount: Amount },
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -33,6 +42,7 @@ pub enum BankrollResponse {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct BankrollParameters {
+    pub master_chain: ChainId,
     pub bonus: Amount,
 }
 

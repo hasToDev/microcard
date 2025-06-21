@@ -112,7 +112,27 @@ impl Contract for BlackjackContract {
             }
             BlackjackOperation::Deal {} => {
                 log::info!("BlackjackOperation::Deal");
-                // TODO: implement deal for both single and multi player
+                match self.state.user_status.get() {
+                    UserStatus::InMultiPlayerGame => {
+                        panic!("multi player deal not implemented yet");
+                        // TODO: implement deal for multi player
+                        // if self.state.channel_game_state.get().status.ne(&BlackjackStatus::WaitingForBets) {
+                        //     panic!("game in play, not ready for dealing bets, please wait for the next hands");
+                        // }
+                        // log::info!("Deal MultiPlayerGame");
+                    }
+                    UserStatus::InSinglePlayerGame => {
+                        if self.state.single_player_game.get().status.ne(&BlackjackStatus::WaitingForBets) {
+                            panic!("game in play, not ready for dealing bets, please wait for the next hands");
+                        }
+                        log::info!("Deal SinglePlayerGame");
+                        // TODO: implement deal for single player
+                        panic!("Single player deal not implemented yet");
+                    }
+                    _ => {
+                        panic!("Player not in any Single or MultiPlayerGame!");
+                    }
+                }
             }
             BlackjackOperation::StartSinglePlayerGame {} => {
                 log::info!("BlackjackOperation::StartSinglePlayerGame");
@@ -127,8 +147,23 @@ impl Contract for BlackjackContract {
                 }
             }
             // * Public Chain
+            // TODO: make any operation on Public Chain only run if authorized by Master Chain/s
             BlackjackOperation::AddPlayChain { chain_id } => {
+                log::info!("BlackjackOperation::AddPlayChain");
                 self.play_chain_manager(chain_id, 0, MutationReason::AddNew).await;
+            }
+            // * Master Chain
+            BlackjackOperation::MintToken { chain_id, amount } => {
+                log::info!("BlackjackOperation::MintToken at {:?}", self.runtime.authenticated_signer());
+                assert_eq!(
+                    self.runtime.chain_id(),
+                    self.runtime.application_parameters().master_chain,
+                    "Incorrect ChainID Authentication for BlackjackOperation::MintToken"
+                );
+
+                let bankroll_app_id = self.runtime.application_parameters().bankroll;
+                self.runtime
+                    .call_application(true, bankroll_app_id, &BankrollOperation::MintToken { chain_id, amount });
             }
         }
     }

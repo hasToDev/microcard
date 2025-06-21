@@ -2,7 +2,7 @@ use abi::bet_chip_profile::Profile;
 use abi::blackjack::{BlackjackGame, UserStatus};
 use abi::deck::Deck;
 use abi::player_dealer::Player;
-use linera_sdk::linera_base_types::ChainId;
+use linera_sdk::linera_base_types::{Amount, ChainId};
 use linera_sdk::views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext};
 
 #[derive(RootView, async_graphql::SimpleObject)]
@@ -10,7 +10,7 @@ use linera_sdk::views::{linera_views, MapView, RegisterView, RootView, ViewStora
 pub struct BlackjackState {
     pub instantiate_value: RegisterView<u64>,
     // All Chain
-    pub blackjack_token: RegisterView<u64>,
+    pub blackjack_token: RegisterView<Amount>,
     // Public Chain
     pub play_chain_set: MapView<u8, Vec<ChainId>>,
     pub play_chain_status: MapView<ChainId, u8>,

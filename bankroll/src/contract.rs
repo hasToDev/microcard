@@ -3,7 +3,8 @@
 mod state;
 
 use self::state::BankrollState;
-use bankroll::{BankrollOperation, BankrollParameters, BankrollResponse};
+use bankroll::{BankrollMessage, BankrollOperation, BankrollParameters, BankrollResponse};
+use linera_sdk::linera_base_types::ChainId;
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
@@ -22,7 +23,7 @@ impl WithContractAbi for BankrollContract {
 }
 
 impl Contract for BankrollContract {
-    type Message = ();
+    type Message = BankrollMessage;
     type Parameters = BankrollParameters;
     type InstantiationArgument = ();
     type EventValue = ();
@@ -39,6 +40,7 @@ impl Contract for BankrollContract {
 
     async fn execute_operation(&mut self, operation: Self::Operation) -> Self::Response {
         match operation {
+            // * User Chain
             BankrollOperation::Balance { owner } => {
                 log::info!("BankrollOperation::Balance request from  {:?}", owner);
                 let mut balance = self
@@ -63,12 +65,40 @@ impl Contract for BankrollContract {
 
                 BankrollResponse::Balance(balance)
             }
+            // * Master Chain
+            BankrollOperation::MintToken { chain_id, amount } => {
+                log::info!("BankrollOperation::MintToken request from {:?}", self.runtime.authenticated_signer());
+                assert_eq!(
+                    self.runtime.chain_id(),
+                    self.runtime.application_parameters().master_chain,
+                    "Incorrect ChainID Authentication for BankrollOperation::MintToken"
+                );
+                self.message_manager(chain_id, BankrollMessage::ReceivedToken { amount });
+                BankrollResponse::Ok
+            }
         }
     }
 
-    async fn execute_message(&mut self, _message: Self::Message) {}
+    async fn execute_message(&mut self, message: Self::Message) {
+        let message_id = self.runtime.message_id().expect("Message ID has to be available when executing a message");
+
+        match message {
+            // * Public Chain
+            BankrollMessage::ReceivedToken { amount } => {
+                log::info!("BankrollMessage::ReceivedToken from {:?} at {:?}", message_id.chain_id, self.runtime.chain_id());
+                let current_token = self.state.token.get_mut();
+                current_token.saturating_add_assign(amount);
+            }
+        }
+    }
 
     async fn store(mut self) {
         self.state.save().await.expect("Failed to save state");
+    }
+}
+
+impl BankrollContract {
+    fn message_manager(&mut self, destination: ChainId, message: BankrollMessage) {
+        self.runtime.prepare_message(message).with_tracking().send_to(destination);
     }
 }
