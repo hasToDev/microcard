@@ -5,8 +5,8 @@ mod state;
 use std::sync::Arc;
 
 use self::state::BlackjackState;
+use abi::bet_chip_profile::Profile;
 use abi::blackjack::{GameData, UserStatus};
-use abi::chipset_profile::Profile;
 use abi::deck::Deck;
 use async_graphql::{EmptySubscription, Object, Schema};
 use blackjack::BlackjackOperation;

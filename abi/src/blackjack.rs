@@ -1,4 +1,4 @@
-use crate::chipset_profile::Profile;
+use crate::bet_chip_profile::Profile;
 use crate::deck::Deck;
 use crate::player_dealer::{Dealer, Player};
 use async_graphql::scalar;

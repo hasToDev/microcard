@@ -3,19 +3,24 @@ use linera_sdk::linera_base_types::Amount;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject)]
-pub struct ChipSet {
+pub struct Chip {
+    pub amount: Amount,
+    pub text: String,
+    pub enable: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject)]
+pub struct BetData {
     pub min_bet: Amount,
     pub max_bet: Amount,
-    pub denominations: Option<[Amount; 5]>,
-    pub denominations_str: Option<[String; 5]>,
-    pub enabled: Option<[bool; 5]>,
+    pub chipset: Option<[Chip; 5]>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject)]
 pub struct Profile {
     pub seat: Option<u8>,
     pub balance: Amount,
-    pub chipset: Option<ChipSet>,
+    pub bet_data: Option<BetData>,
 }
 
 impl Profile {
@@ -31,18 +36,16 @@ impl Profile {
         self.balance = amount
     }
 
-    pub fn calculate_chipset(&mut self) {
+    pub fn calculate_bet_data(&mut self) {
         // Minimum base value (smallest chip)
         let mut base = Amount::from_tokens(100);
 
         // Handle balances below the minimum
         if self.balance < base {
-            self.chipset = Some(ChipSet {
+            self.bet_data = Some(BetData {
                 min_bet: Amount::ZERO,
                 max_bet: self.balance,
-                denominations: None,
-                denominations_str: None,
-                enabled: None,
+                chipset: None,
             });
             return;
         }
@@ -66,39 +69,48 @@ impl Profile {
             base.saturating_mul(250), // 250x
         ];
 
-        // Determine enabled status based on balance
-        let enabled = [
-            denominations[0] <= self.balance,
-            denominations[1] <= self.balance,
-            denominations[2] <= self.balance,
-            denominations[3] <= self.balance,
-            denominations[4] <= self.balance,
+        // Generate chip list
+        let generated_chip_list = [
+            Chip {
+                amount: denominations[0],
+                text: format_chip_units(denominations[0].saturating_div(Amount::ONE)),
+                enable: denominations[0] <= self.balance,
+            },
+            Chip {
+                amount: denominations[1],
+                text: format_chip_units(denominations[1].saturating_div(Amount::ONE)),
+                enable: denominations[1] <= self.balance,
+            },
+            Chip {
+                amount: denominations[2],
+                text: format_chip_units(denominations[2].saturating_div(Amount::ONE)),
+                enable: denominations[2] <= self.balance,
+            },
+            Chip {
+                amount: denominations[3],
+                text: format_chip_units(denominations[3].saturating_div(Amount::ONE)),
+                enable: denominations[3] <= self.balance,
+            },
+            Chip {
+                amount: denominations[4],
+                text: format_chip_units(denominations[4].saturating_div(Amount::ONE)),
+                enable: denominations[4] <= self.balance,
+            },
         ];
 
-        // Generate chip String denominations
-        let denominations_str = [
-            format_chipset_units(denominations[0].saturating_div(Amount::ONE)),
-            format_chipset_units(denominations[1].saturating_div(Amount::ONE)),
-            format_chipset_units(denominations[2].saturating_div(Amount::ONE)),
-            format_chipset_units(denominations[3].saturating_div(Amount::ONE)),
-            format_chipset_units(denominations[4].saturating_div(Amount::ONE)),
-        ];
-
-        self.chipset = Some(ChipSet {
+        self.bet_data = Some(BetData {
             min_bet: denominations[0], // Smallest denomination
             max_bet: self.balance,     // Player's full balance
-            denominations: Some(denominations),
-            denominations_str: Some(denominations_str),
-            enabled: Some(enabled),
+            chipset: Some(generated_chip_list),
         })
     }
 
-    pub fn clear_chipset(&mut self) {
-        self.chipset = None
+    pub fn clear_bet_data(&mut self) {
+        self.bet_data = None
     }
 }
 
-pub fn format_chipset_units(value: u128) -> String {
+pub fn format_chip_units(value: u128) -> String {
     if value < 1000 {
         return value.to_string();
     }
@@ -125,17 +137,17 @@ pub fn format_chipset_units(value: u128) -> String {
                 // Try next higher suffix
                 if let Some(&(next_suffix, next_divisor)) = SUFFIXES.get(SUFFIXES.len() - SUFFIXES.iter().position(|&s| s.1 == divisor).unwrap() - 1) {
                     let next_scaled = value as f64 / next_divisor as f64;
-                    return format_chipset_float(next_scaled, next_suffix);
+                    return format_chip_float(next_scaled, next_suffix);
                 }
             }
-            return format_chipset_float(scaled, suffix);
+            return format_chip_float(scaled, suffix);
         }
     }
 
     value.to_string()
 }
 
-fn format_chipset_float(value: f64, suffix: &str) -> String {
+fn format_chip_float(value: f64, suffix: &str) -> String {
     // Round to the nearest tenth
     let rounded = (value * 10.0).round() / 10.0;
 

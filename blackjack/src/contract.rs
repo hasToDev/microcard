@@ -118,7 +118,7 @@ impl Contract for BlackjackContract {
                 log::info!("BlackjackOperation::StartSinglePlayerGame");
                 match self.state.user_status.get() {
                     UserStatus::Idle | UserStatus::PlayChainUnavailable => {
-                        self.update_profile_balance_and_chipset();
+                        self.update_profile_balance_and_bet_data();
                         self.add_user_to_new_single_player_game();
                     }
                     current_status => {
@@ -140,7 +140,7 @@ impl Contract for BlackjackContract {
             // * User Chain
             BlackjackMessage::FindPlayChainResult { chain_id } => {
                 if self.process_find_play_chain_result(message_id, chain_id) {
-                    self.update_profile_balance_and_chipset();
+                    self.update_profile_balance_and_bet_data();
                 }
             }
             BlackjackMessage::RequestTableSeatResult { seat_id, success } => {
@@ -223,11 +223,11 @@ impl BlackjackContract {
         new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
         BlackjackGame::new(Deck::with_cards(new_card_stack))
     }
-    fn update_profile_balance_and_chipset(&mut self) {
+    fn update_profile_balance_and_bet_data(&mut self) {
         let balance = self.get_bankroll_balance();
         let profile = self.state.profile.get_mut();
         profile.update_balance(balance);
-        profile.calculate_chipset();
+        profile.calculate_bet_data();
     }
     fn get_public_chain(&mut self) -> ChainId {
         let i = get_random_value(
@@ -302,24 +302,24 @@ impl BlackjackContract {
         self.state.user_status.set(UserStatus::InMultiPlayerGame);
     }
     async fn player_bet(&mut self, amount: Amount) {
-        if self.state.profile.get().chipset.is_none() {
-            panic!("missing Chipset data for placing bet");
+        if self.state.profile.get().bet_data.is_none() {
+            panic!("missing Bet Data for placing bet");
         }
 
         let user_profile = self.state.profile.get().clone();
-        let chipset = user_profile.chipset.unwrap();
+        let bet_data = user_profile.bet_data.unwrap();
 
         if user_profile.seat.is_none() {
             panic!("missing Player Seat ID");
         }
-        if user_profile.balance.eq(&Amount::ZERO) || user_profile.balance.lt(&chipset.min_bet) {
+        if user_profile.balance.eq(&Amount::ZERO) || user_profile.balance.lt(&bet_data.min_bet) {
             panic!("not enough Player balance");
         }
-        if amount.lt(&chipset.min_bet) {
-            panic!("minimum bet is {:?}", chipset.min_bet);
+        if amount.lt(&bet_data.min_bet) {
+            panic!("minimum bet is {:?}", bet_data.min_bet);
         }
-        if amount.gt(&chipset.max_bet) {
-            panic!("maximum bet is {:?}", chipset.max_bet);
+        if amount.gt(&bet_data.max_bet) {
+            panic!("maximum bet is {:?}", bet_data.max_bet);
         }
 
         let seat_id = user_profile.seat.unwrap();

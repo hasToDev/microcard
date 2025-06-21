@@ -1,5 +1,5 @@
+use abi::bet_chip_profile::Profile;
 use abi::blackjack::{BlackjackGame, UserStatus};
-use abi::chipset_profile::Profile;
 use abi::deck::Deck;
 use abi::player_dealer::Player;
 use linera_sdk::linera_base_types::ChainId;
