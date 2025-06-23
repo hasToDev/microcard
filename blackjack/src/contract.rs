@@ -385,7 +385,7 @@ impl BlackjackContract {
                 panic!("Player not found!");
             });
 
-        player.update_bet(amount);
+        player.add_bet(amount, user_profile.balance);
     }
     // * Play Chain
     fn channel_manager(&mut self, message: BlackjackMessage) {

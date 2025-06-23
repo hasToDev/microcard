@@ -24,8 +24,17 @@ impl Player {
         }
     }
 
-    pub fn update_bet(&mut self, amount: Amount) {
-        self.bet = amount
+    pub fn add_bet(&mut self, amount: Amount, current_profile_balance: Amount) {
+        if self.balance.ne(&current_profile_balance) {
+            panic!("Profile and Player balance didn't match!");
+        }
+
+        let new_bet = self.bet.saturating_add(amount);
+        if new_bet.gt(&self.balance) {
+            panic!("Bets exceeding player balance!");
+        }
+
+        self.bet = new_bet
     }
 
     pub fn reset_bet(&mut self) {
