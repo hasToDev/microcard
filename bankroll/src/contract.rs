@@ -67,12 +67,12 @@ impl Contract for BankrollContract {
             }
             // * Master Chain
             BankrollOperation::MintToken { chain_id, amount } => {
-                log::info!("BankrollOperation::MintToken request from {:?}", self.runtime.authenticated_signer());
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_parameters().master_chain,
-                    "Incorrect ChainID Authentication for BankrollOperation::MintToken"
+                    "MasterChain Authorization Required for BankrollOperation::MintToken"
                 );
+                log::info!("BankrollOperation::MintToken request from {:?}", self.runtime.authenticated_signer());
                 self.message_manager(chain_id, BankrollMessage::ReceivedToken { amount });
                 BankrollResponse::Ok
             }

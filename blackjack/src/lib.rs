@@ -32,9 +32,8 @@ pub enum BlackjackOperation {
     Bet { amount: Amount },
     Deal {},
     StartSinglePlayerGame {},
-    // * Public Chain
-    AddPlayChain { chain_id: ChainId },
     // * Master Chain
+    AddPlayChain { target_public_chain: ChainId, play_chain_id: ChainId },
     MintToken { chain_id: ChainId, amount: Amount },
 }
 
@@ -49,6 +48,7 @@ pub enum BlackjackMessage {
     RequestTableSeat { seat_id: u8, balance: Amount },
     // * Public Chain
     FindPlayChain,
+    AddPlayChain { chain_id: ChainId },
     // * Channel Subscriber
     ChannelGameState { game: BlackjackGame },
 }

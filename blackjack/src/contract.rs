@@ -146,21 +146,26 @@ impl Contract for BlackjackContract {
                     }
                 }
             }
-            // * Public Chain
-            // TODO: make any operation on Public Chain only run if authorized by Master Chain/s
-            BlackjackOperation::AddPlayChain { chain_id } => {
-                log::info!("BlackjackOperation::AddPlayChain");
-                self.play_chain_manager(chain_id, 0, MutationReason::AddNew).await;
-            }
             // * Master Chain
-            BlackjackOperation::MintToken { chain_id, amount } => {
-                log::info!("BlackjackOperation::MintToken at {:?}", self.runtime.authenticated_signer());
+            BlackjackOperation::AddPlayChain {
+                target_public_chain,
+                play_chain_id,
+            } => {
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_parameters().master_chain,
-                    "Incorrect ChainID Authentication for BlackjackOperation::MintToken"
+                    "MasterChain Authorization Required for BankrollOperation::AddPlayChain"
                 );
-
+                log::info!("BlackjackOperation::AddPlayChain at {:?}", self.runtime.authenticated_signer());
+                self.message_manager(target_public_chain, BlackjackMessage::AddPlayChain { chain_id: play_chain_id });
+            }
+            BlackjackOperation::MintToken { chain_id, amount } => {
+                assert_eq!(
+                    self.runtime.chain_id(),
+                    self.runtime.application_parameters().master_chain,
+                    "MasterChain Authorization Required for BlackjackOperation::MintToken"
+                );
+                log::info!("BlackjackOperation::MintToken at {:?}", self.runtime.authenticated_signer());
                 let bankroll_app_id = self.runtime.application_parameters().bankroll;
                 self.runtime
                     .call_application(true, bankroll_app_id, &BankrollOperation::MintToken { chain_id, amount });
@@ -197,6 +202,15 @@ impl Contract for BlackjackContract {
 
                 let result = self.search_available_play_chain().await;
                 self.message_manager(message_id.chain_id, BlackjackMessage::FindPlayChainResult { chain_id: result });
+            }
+            BlackjackMessage::AddPlayChain { chain_id } => {
+                assert_eq!(
+                    message_id.chain_id,
+                    self.runtime.application_parameters().master_chain,
+                    "MasterChain Authorization Required for BlackjackMessage::AddPlayChain"
+                );
+                log::info!("BankrollMessage::AddPlayChain from {:?} at {:?}", message_id.chain_id, self.runtime.chain_id());
+                self.play_chain_manager(chain_id, 0, MutationReason::AddNew).await;
             }
             // * Play Chain
             BlackjackMessage::Subscribe => {
