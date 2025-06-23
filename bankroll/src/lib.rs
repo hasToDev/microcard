@@ -23,6 +23,7 @@ impl ServiceAbi for BankrollAbi {
 pub enum BankrollOperation {
     // * User Chain
     Balance { owner: AccountOwner },
+    UpdateBalance { owner: AccountOwner, amount: Amount },
     // * Master Chain
     MintToken { chain_id: ChainId, amount: Amount },
 }

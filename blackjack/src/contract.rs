@@ -116,6 +116,7 @@ impl Contract for BlackjackContract {
                     UserStatus::InMultiPlayerGame => {
                         panic!("multi player deal not implemented yet");
                         // TODO: implement deal for multi player
+                        // TODO: after the last player call DEAL, continue with changing BlackjackStatus,drawing card for both dealer and players
                         // if self.state.channel_game_state.get().status.ne(&BlackjackStatus::WaitingForBets) {
                         //     panic!("game in play, not ready for dealing bets, please wait for the next hands");
                         // }
@@ -126,8 +127,8 @@ impl Contract for BlackjackContract {
                             panic!("game in play, not ready for dealing bets, please wait for the next hands");
                         }
                         log::info!("Deal SinglePlayerGame");
-                        // TODO: implement deal for single player
-                        panic!("Single player deal not implemented yet");
+                        self.deal_single_player().await;
+                        // TODO: continue with changing BlackjackStatus,drawing card for both dealer and player
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -140,6 +141,8 @@ impl Contract for BlackjackContract {
                     UserStatus::Idle | UserStatus::PlayChainUnavailable => {
                         self.update_profile_balance_and_bet_data();
                         self.add_user_to_new_single_player_game();
+                        let token_pool_address = self.get_public_chain();
+                        self.state.token_pool_address.set(Some(token_pool_address));
                     }
                     current_status => {
                         panic!("Unable to Start Single Player Game, user status is {:?}", current_status);
@@ -260,6 +263,13 @@ impl BlackjackContract {
         }
     }
 
+    fn update_bankroll_balance(&mut self, amount: Amount) {
+        let owner = self.runtime.application_id().into();
+        let bankroll_app_id = self.runtime.application_parameters().bankroll;
+        self.runtime
+            .call_application(true, bankroll_app_id, &BankrollOperation::UpdateBalance { owner, amount });
+    }
+
     // * User Chain
     fn create_single_player_blackjack_game(&mut self) -> BlackjackGame {
         let mut new_card_stack = get_new_deck(self.runtime.system_time().to_string());
@@ -372,20 +382,32 @@ impl BlackjackContract {
         }
 
         let seat_id = user_profile.seat.unwrap();
-
-        let player = self
-            .state
-            .player_seat_map
-            .get_mut(&seat_id)
-            .await
-            .unwrap_or_else(|_| {
-                panic!("Player not found!");
-            })
-            .unwrap_or_else(|| {
-                panic!("Player not found!");
-            });
+        let player_async = self.state.player_seat_map.get_mut(&seat_id).await;
+        let player = player_async.expect("Player not found!").expect("Player not found!");
 
         player.add_bet(amount, user_profile.balance);
+    }
+    async fn deal_single_player(&mut self) {
+        let profile = self.state.profile.get_mut();
+        let seat_id = profile.seat;
+        if seat_id.is_none() {
+            panic!("missing Player Seat ID");
+        }
+
+        let bet_data = &profile.bet_data;
+        if bet_data.is_none() {
+            panic!("missing Bet Data");
+        }
+
+        let player_async = self.state.player_seat_map.get_mut(&seat_id.unwrap()).await;
+        let player = player_async.expect("Player not found!").expect("Player not found!");
+
+        let (bet_amount, latest_balance) = player.deal(bet_data.clone().unwrap().min_bet, profile.balance);
+        profile.update_balance(latest_balance);
+        self.update_bankroll_balance(latest_balance);
+
+        let blackjack_token_pool = self.state.blackjack_token_pool.get_mut();
+        blackjack_token_pool.saturating_add_assign(bet_amount);
     }
     // * Play Chain
     fn channel_manager(&mut self, message: BlackjackMessage) {

@@ -40,6 +40,23 @@ impl Player {
     pub fn reset_bet(&mut self) {
         self.bet = Amount::from_tokens(0)
     }
+
+    pub fn deal(&mut self, min_bet: Amount, current_profile_balance: Amount) -> (Amount, Amount) {
+        if self.balance.ne(&current_profile_balance) {
+            panic!("Profile and Player balance didn't match!");
+        }
+
+        if min_bet.gt(&self.balance) {
+            panic!("Minimum Bets exceeding player balance!");
+        }
+
+        if self.bet == Amount::ZERO {
+            self.bet = min_bet
+        }
+
+        self.balance = self.balance.saturating_sub(self.bet);
+        (self.bet, self.balance)
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject)]

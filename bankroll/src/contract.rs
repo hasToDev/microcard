@@ -43,15 +43,9 @@ impl Contract for BankrollContract {
             // * User Chain
             BankrollOperation::Balance { owner } => {
                 log::info!("BankrollOperation::Balance request from  {:?}", owner);
-                let mut balance = self
-                    .state
-                    .accounts
-                    .get(&owner)
-                    .await
-                    .unwrap_or_else(|_| {
-                        panic!("unable to get {:?} balance", owner);
-                    })
-                    .unwrap_or_default();
+
+                let balance_async = self.state.accounts.get(&owner).await;
+                let mut balance = balance_async.expect("unable to get balance").unwrap_or_default();
 
                 let daily_bonus = self.state.daily_bonus.get_mut();
                 if daily_bonus.is_zero() {
@@ -64,6 +58,15 @@ impl Contract for BankrollContract {
                 });
 
                 BankrollResponse::Balance(balance)
+            }
+            BankrollOperation::UpdateBalance { owner, amount } => {
+                log::info!("BankrollOperation::UpdateBalance request from {:?}", owner);
+
+                self.state.accounts.insert(&owner, amount).unwrap_or_else(|_| {
+                    panic!("unable to update {:?} balance", owner);
+                });
+
+                BankrollResponse::Ok
             }
             // * Master Chain
             BankrollOperation::MintToken { chain_id, amount } => {
