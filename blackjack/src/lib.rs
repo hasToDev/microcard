@@ -49,8 +49,6 @@ pub enum BlackjackMessage {
     // * Public Chain
     FindPlayChain,
     AddPlayChain { chain_id: ChainId },
-    // * Channel Subscriber
-    ChannelGameState { game: BlackjackGame },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -58,4 +56,10 @@ pub struct BlackjackParameters {
     pub master_chain: ChainId,
     pub public_chains: Vec<ChainId>,
     pub bankroll: ApplicationId<BankrollAbi>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum BlackjackEvent {
+    // * Event Subscriber
+    GameState { game: BlackjackGame },
 }

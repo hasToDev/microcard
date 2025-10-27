@@ -3,13 +3,13 @@
 mod state;
 
 use self::state::BlackjackState;
-use abi::blackjack::{blackjack_channel, BlackjackGame, BlackjackStatus, MutationReason, UserStatus, MAX_BLACKJACK_PLAYERS};
+use abi::blackjack::{BlackjackGame, BlackjackStatus, MutationReason, UserStatus, BLACKJACK_STREAM_NAME, MAX_BLACKJACK_PLAYERS};
 use abi::deck::{get_new_deck, Deck};
 use abi::player_dealer::Player;
 use abi::random::get_random_value;
 use bankroll::{BankrollOperation, BankrollResponse};
-use blackjack::{BlackjackMessage, BlackjackOperation, BlackjackParameters};
-use linera_sdk::linera_base_types::{Amount, ChainId, MessageId};
+use blackjack::{BlackjackEvent, BlackjackMessage, BlackjackOperation, BlackjackParameters};
+use linera_sdk::linera_base_types::{Amount, ChainId, StreamUpdate};
 use linera_sdk::{
     linera_base_types::WithContractAbi,
     views::{RootView, View},
@@ -31,7 +31,7 @@ impl Contract for BlackjackContract {
     type Message = BlackjackMessage;
     type Parameters = BlackjackParameters;
     type InstantiationArgument = u64;
-    type EventValue = ();
+    type EventValue = BlackjackEvent;
 
     async fn load(runtime: ContractRuntime<Self>) -> Self {
         let state = BlackjackState::load(runtime.root_view_storage_context()).await.expect("Failed to load state");
@@ -177,68 +177,78 @@ impl Contract for BlackjackContract {
     }
 
     async fn execute_message(&mut self, message: Self::Message) {
-        let message_id = self.runtime.message_id().expect("Message ID has to be available when executing a message");
+        let origin_chain_id = self.runtime.message_origin_chain_id().expect("Chain ID missing from message");
 
         match message {
             // * User Chain
             BlackjackMessage::FindPlayChainResult { chain_id } => {
-                if self.process_find_play_chain_result(message_id, chain_id) {
+                if self.process_find_play_chain_result(origin_chain_id, chain_id) {
                     self.update_profile_balance_and_bet_data();
                 }
             }
             BlackjackMessage::RequestTableSeatResult { seat_id, success } => {
                 if success {
                     self.add_user_to_new_multi_player_game(seat_id);
-                    log::info!("RequestTableSeatResult SUCCESS on {:?}!", message_id.chain_id);
+                    log::info!("RequestTableSeatResult SUCCESS on {:?}!", origin_chain_id);
                     return;
                 }
                 self.state.user_status.set(UserStatus::RequestTableSeatFail);
-                log::info!("RequestTableSeatResult FAILED on {:?}", message_id.chain_id);
+                log::info!("RequestTableSeatResult FAILED on {:?}", origin_chain_id);
             }
             // * Public Chain
             BlackjackMessage::FindPlayChain => {
                 log::info!(
                     "\nFindPlayChain Request Accepted at {:?} from: {:?}\n",
                     self.runtime.chain_id(),
-                    message_id.chain_id
+                    origin_chain_id
                 );
 
                 let result = self.search_available_play_chain().await;
-                self.message_manager(message_id.chain_id, BlackjackMessage::FindPlayChainResult { chain_id: result });
+                self.message_manager(origin_chain_id, BlackjackMessage::FindPlayChainResult { chain_id: result });
             }
             BlackjackMessage::AddPlayChain { chain_id } => {
                 assert_eq!(
-                    message_id.chain_id,
+                    origin_chain_id,
                     self.runtime.application_parameters().master_chain,
                     "MasterChain Authorization Required for BlackjackMessage::AddPlayChain"
                 );
-                log::info!("BankrollMessage::AddPlayChain from {:?} at {:?}", message_id.chain_id, self.runtime.chain_id());
+                log::info!("BankrollMessage::AddPlayChain from {:?} at {:?}", origin_chain_id, self.runtime.chain_id());
                 self.play_chain_manager(chain_id, 0, MutationReason::AddNew).await;
             }
             // * Play Chain
             BlackjackMessage::Subscribe => {
-                self.runtime.subscribe(message_id.chain_id, blackjack_channel());
-                log::info!("\nUser {:?} subscribe to Play Chain {:?}\n", message_id.chain_id, self.runtime.chain_id());
+                let app_id = self.runtime.application_id().forget_abi();
+                self.runtime.subscribe_to_events(origin_chain_id, app_id, BLACKJACK_STREAM_NAME.into());
+                log::info!("\nUser {:?} subscribe to Play Chain {:?}\n", origin_chain_id, self.runtime.chain_id());
             }
             BlackjackMessage::Unsubscribe => {
-                self.runtime.unsubscribe(message_id.chain_id, blackjack_channel());
-                log::info!("\nUser {:?} unsubscribe from Play Chain {:?}\n", message_id.chain_id, self.runtime.chain_id());
+                let app_id = self.runtime.application_id().forget_abi();
+                self.runtime.unsubscribe_from_events(origin_chain_id, app_id, BLACKJACK_STREAM_NAME.into());
+                log::info!("\nUser {:?} unsubscribe from Play Chain {:?}\n", origin_chain_id, self.runtime.chain_id());
             }
             BlackjackMessage::RequestTableSeat { seat_id, balance } => {
-                if self.request_table_seat_manager(seat_id, balance, message_id).is_some() {
+                if self.request_table_seat_manager(seat_id, balance, origin_chain_id).is_some() {
                     let game = self.state.game.get();
-                    self.channel_manager(BlackjackMessage::ChannelGameState { game: game.data_for_channel() })
+                    self.channel_manager(BlackjackEvent::GameState { game: game.data_for_channel() })
                 }
-                log::info!(
-                    "\nUser {:?} RequestTableSeat to Play Chain {:?}\n",
-                    message_id.chain_id,
-                    self.runtime.chain_id()
-                );
+                log::info!("\nUser {:?} RequestTableSeat to Play Chain {:?}\n", origin_chain_id, self.runtime.chain_id());
             }
-            // * Channel Subscriber
-            BlackjackMessage::ChannelGameState { game } => {
-                log::info!("\nUser {:?} received new game state:\n {:?}", self.runtime.chain_id(), game);
-                self.state.channel_game_state.set(game);
+        }
+    }
+
+    // * Stream Subscriber
+    async fn process_streams(&mut self, updates: Vec<StreamUpdate>) {
+        for update in updates {
+            assert_eq!(update.stream_id.stream_name, BLACKJACK_STREAM_NAME.into());
+            assert_eq!(update.stream_id.application_id, self.runtime.application_id().forget_abi().into());
+            for index in update.new_indices() {
+                let event = self.runtime.read_event(update.chain_id, BLACKJACK_STREAM_NAME.into(), index);
+                match event {
+                    BlackjackEvent::GameState { game } => {
+                        log::info!("\nUser {:?} received new game state:\n {:?}", self.runtime.chain_id(), game);
+                        self.state.channel_game_state.set(game);
+                    }
+                }
             }
         }
     }
@@ -301,13 +311,9 @@ impl BlackjackContract {
             panic!("unable to find public chain");
         })
     }
-    fn process_find_play_chain_result(&mut self, message_id: MessageId, chain_id: Option<ChainId>) -> bool {
+    fn process_find_play_chain_result(&mut self, origin_chain_id: ChainId, chain_id: Option<ChainId>) -> bool {
         if let Some(chain) = chain_id {
-            log::info!(
-                "\nFindPlayChain Result Received at {:?} from: {:?}\n",
-                self.runtime.chain_id(),
-                message_id.chain_id
-            );
+            log::info!("\nFindPlayChain Result Received at {:?} from: {:?}\n", self.runtime.chain_id(), origin_chain_id);
             log::info!("Available Chain ID {:?}", chain);
             self.state.user_status.set(UserStatus::PlayChainFound);
             self.state.find_play_chain_retry.set(0);
@@ -410,20 +416,20 @@ impl BlackjackContract {
         blackjack_token_pool.saturating_add_assign(bet_amount);
     }
     // * Play Chain
-    fn channel_manager(&mut self, message: BlackjackMessage) {
-        self.runtime.prepare_message(message).with_tracking().send_to(blackjack_channel());
+    fn channel_manager(&mut self, event: BlackjackEvent) {
+        self.runtime.emit(BLACKJACK_STREAM_NAME.into(), &event);
     }
-    fn request_table_seat_manager(&mut self, seat_id: u8, balance: Amount, message_id: MessageId) -> Option<()> {
+    fn request_table_seat_manager(&mut self, seat_id: u8, balance: Amount, origin_chain_id: ChainId) -> Option<()> {
         let game = self.state.game.get_mut();
 
         if game.is_seat_taken(seat_id) {
-            self.message_manager(message_id.chain_id, BlackjackMessage::RequestTableSeatResult { seat_id, success: false });
+            self.message_manager(origin_chain_id, BlackjackMessage::RequestTableSeatResult { seat_id, success: false });
             return None;
         }
 
-        let player = Player::new(seat_id, balance, message_id.chain_id);
+        let player = Player::new(seat_id, balance, origin_chain_id);
         game.register_player(seat_id, player);
-        self.message_manager(message_id.chain_id, BlackjackMessage::RequestTableSeatResult { seat_id, success: true });
+        self.message_manager(origin_chain_id, BlackjackMessage::RequestTableSeatResult { seat_id, success: true });
         Some(())
     }
     // * Public Chain

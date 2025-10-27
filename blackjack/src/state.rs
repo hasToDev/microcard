@@ -6,7 +6,7 @@ use linera_sdk::linera_base_types::{Amount, ChainId};
 use linera_sdk::views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext};
 
 #[derive(RootView, async_graphql::SimpleObject)]
-#[view(context = "ViewStorageContext")]
+#[view(context = ViewStorageContext)]
 pub struct BlackjackState {
     pub instantiate_value: RegisterView<u64>,
     // All Chain

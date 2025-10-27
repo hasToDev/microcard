@@ -83,12 +83,12 @@ impl Contract for BankrollContract {
     }
 
     async fn execute_message(&mut self, message: Self::Message) {
-        let message_id = self.runtime.message_id().expect("Message ID has to be available when executing a message");
+        let origin_chain_id = self.runtime.message_origin_chain_id().expect("Chain ID missing from message");
 
         match message {
             // * Public Chain
             BankrollMessage::ReceivedToken { amount } => {
-                log::info!("BankrollMessage::ReceivedToken from {:?} at {:?}", message_id.chain_id, self.runtime.chain_id());
+                log::info!("BankrollMessage::ReceivedToken from {:?} at {:?}", origin_chain_id, self.runtime.chain_id());
                 let current_token = self.state.token.get_mut();
                 current_token.saturating_add_assign(amount);
             }
