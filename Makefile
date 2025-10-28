@@ -2,4 +2,4 @@
 
 transfer:
 	@echo "Running transfer script..."
-	./temp/update_microcard_wsl.sh
+	./temp/conway/update_microcard_wsl.sh
