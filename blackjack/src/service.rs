@@ -4,13 +4,14 @@ mod state;
 
 use std::sync::Arc;
 
+use self::state::BlackjackState;
+use abi::bet_chip_profile::Profile;
+use abi::blackjack::{GameData, UserStatus};
 use abi::deck::Deck;
 use async_graphql::{EmptySubscription, Object, Schema};
 use blackjack::BlackjackOperation;
 use linera_sdk::linera_base_types::ChainId;
 use linera_sdk::{graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
-
-use self::state::BlackjackState;
 
 pub struct BlackjackService {
     state: Arc<BlackjackState>,
@@ -27,9 +28,7 @@ impl Service for BlackjackService {
     type Parameters = ();
 
     async fn new(runtime: ServiceRuntime<Self>) -> Self {
-        let state = BlackjackState::load(runtime.root_view_storage_context())
-            .await
-            .expect("Failed to load state");
+        let state = BlackjackState::load(runtime.root_view_storage_context()).await.expect("Failed to load state");
         BlackjackService {
             state: Arc::new(state),
             runtime: Arc::new(runtime),
@@ -64,5 +63,23 @@ impl QueryRoot {
     }
     async fn get_play_chains(&self) -> Vec<ChainId> {
         self.state.play_chain_status.indices().await.unwrap_or_default()
+    }
+    async fn single_player_data(&self) -> GameData {
+        GameData {
+            profile: self.state.profile.get().clone(),
+            game: self.state.single_player_game.get().data_for_channel(),
+        }
+    }
+    async fn multi_player_data(&self) -> GameData {
+        GameData {
+            profile: self.state.profile.get().clone(),
+            game: self.state.channel_game_state.get().data_for_channel(),
+        }
+    }
+    async fn get_profile(&self) -> Profile {
+        self.state.profile.get().clone()
+    }
+    async fn get_user_status(&self) -> UserStatus {
+        self.state.user_status.get().clone()
     }
 }

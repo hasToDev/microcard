@@ -1,3 +1,4 @@
+pub mod bet_chip_profile;
 pub mod blackjack;
 pub mod deck;
 pub mod player_dealer;

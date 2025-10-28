@@ -1,12 +1,11 @@
 [package]
-name = "blackjack"
+name = "bankroll"
 version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 abi.workspace = true
 async-graphql.workspace = true
-bankroll.workspace = true
 log.workspace = true
 linera-sdk.workspace = true
 futures.workspace = true
@@ -21,9 +20,10 @@ linera-sdk = { workspace = true, features = ["test", "wasmer"] }
 linera-sdk = { workspace = true, features = ["test"] }
 
 [[bin]]
-name = "blackjack_contract"
+name = "bankroll_contract"
 path = "src/contract.rs"
 
 [[bin]]
-name = "blackjack_service"
+name = "bankroll_service"
 path = "src/service.rs"
+

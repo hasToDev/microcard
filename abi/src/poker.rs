@@ -2,18 +2,13 @@ use crate::deck::Deck;
 use crate::player_dealer::{Dealer, Player};
 use async_graphql::scalar;
 use async_graphql_derive::SimpleObject;
-use linera_sdk::linera_base_types::ChannelName;
 use serde::{Deserialize, Serialize};
 
 /// Maximum number of players allowed in a Poker game.
 const MAX_POKER_PLAYERS: usize = 8;
 
-/// The channel name the application uses for cross-chain messages about game event.
-const POKER_EVENT_NAME: &[u8] = b"poker";
-
-pub fn poker_channel() -> ChannelName {
-    ChannelName::from(POKER_EVENT_NAME.to_vec())
-}
+/// The stream name the application uses for events about poker game event.
+const POKER_STREAM_NAME: &[u8] = b"poker";
 
 scalar!(BettingRound);
 #[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize)]
@@ -45,7 +40,7 @@ impl PokerGame {
         Ok(PokerGame {
             dealer: Dealer { hand: vec![] },
             players,
-            deck: Deck::new(),
+            deck: Deck::empty(),
             community_cards: vec![],
             pot: 0,
             current_round: BettingRound::PreFlop,

@@ -2,13 +2,14 @@
 resolver = "2"
 members = [
     "abi",
+    "bankroll",
     "blackjack",
 ]
 
 [workspace.dependencies]
-async-graphql = { version = "=7.0.16", default-features = false }
-async-graphql-derive = { version = "=7.0.16", default-features = false }
-linera-sdk = { version = "0.14.1" }
+async-graphql = { version = "=7.0.17", default-features = false }
+async-graphql-derive = { version = "=7.0.17", default-features = false }
+linera-sdk = { version = "0.15.4" }
 futures = { version = "0.3 " }
 getrandom = { version = "0.2.15", default-features = false, features = ["custom"] }
 log = { version = "0.4.27" }
@@ -18,7 +19,7 @@ serde_json = { version = "1.0" }
 tokio = { version = "1.40", features = ["rt", "sync"] }
 
 abi = { path = "./abi" }
-blackjack = { path = "./blackjack" }
+bankroll = { path = "./bankroll" }
 
 [profile.release]
 debug = true
