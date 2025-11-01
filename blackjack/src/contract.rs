@@ -128,7 +128,7 @@ impl Contract for BlackjackContract {
                         }
                         log::info!("Deal SinglePlayerGame");
                         self.deal_single_player().await;
-                        // TODO: continue with changing BlackjackStatus,drawing card for both dealer and player
+                        self.draw_single_player().await;
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -414,6 +414,16 @@ impl BlackjackContract {
 
         let blackjack_token_pool = self.state.blackjack_token_pool.get_mut();
         blackjack_token_pool.saturating_add_assign(bet_amount);
+    }
+    async fn draw_single_player(&mut self) {
+        let seat_id = self.state.profile.get().seat;
+        if seat_id.is_none() {
+            panic!("missing Player Seat ID");
+        }
+
+        let blackjack_game = self.state.single_player_game.get_mut();
+        blackjack_game.draw_initial_cards(seat_id.unwrap());
+        blackjack_game.update_status(BlackjackStatus::PlayerTurn);
     }
     // * Play Chain
     fn channel_manager(&mut self, event: BlackjackEvent) {

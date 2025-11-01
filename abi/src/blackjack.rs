@@ -98,6 +98,30 @@ impl BlackjackGame {
         }
     }
 
+    pub fn draw_initial_cards(&mut self, seat_id: u8) {
+        // Deal 2 cards to the dealer
+        for _ in 0..2 {
+            if let Some(card) = self.deck.deal() {
+                self.dealer.hand.push(card);
+            } else {
+                panic!("Deck ran out of cards while dealing to dealer");
+            }
+        }
+
+        // Get the player and deal 2 cards to them
+        if let Some(player) = self.players.get_mut(&seat_id) {
+            for _ in 0..2 {
+                if let Some(card) = self.deck.deal() {
+                    player.hand.push(card);
+                } else {
+                    panic!("Deck ran out of cards while dealing to player");
+                }
+            }
+        } else {
+            panic!("Player not found at seat {}", seat_id);
+        }
+    }
+
     pub fn data_for_channel(&self) -> Self {
         // hide dealer hand until BlackjackStatus::DealerTurn
         if self.status != BlackjackStatus::DealerTurn {
