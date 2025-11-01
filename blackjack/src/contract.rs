@@ -127,8 +127,43 @@ impl Contract for BlackjackContract {
                             panic!("game in play, not ready for dealing bets, please wait for the next hands");
                         }
                         log::info!("Deal SinglePlayerGame");
-                        self.deal_single_player().await;
-                        self.draw_single_player().await;
+                        self.deal_draw_single_player().await;
+                    }
+                    _ => {
+                        panic!("Player not in any Single or MultiPlayerGame!");
+                    }
+                }
+            }
+            BlackjackOperation::Hit {} => {
+                log::info!("BlackjackOperation::Hit");
+                match self.state.user_status.get() {
+                    UserStatus::InMultiPlayerGame => {
+                        panic!("multi player hit not implemented yet");
+                    }
+                    UserStatus::InSinglePlayerGame => {
+                        if self.state.single_player_game.get().status.ne(&BlackjackStatus::PlayerTurn) {
+                            panic!("not the player turn");
+                        }
+                        log::info!("Hit SinglePlayerGame");
+                        // TODO: implement hit
+                    }
+                    _ => {
+                        panic!("Player not in any Single or MultiPlayerGame!");
+                    }
+                }
+            }
+            BlackjackOperation::Stand {} => {
+                log::info!("BlackjackOperation::Stand");
+                match self.state.user_status.get() {
+                    UserStatus::InMultiPlayerGame => {
+                        panic!("multi player stand not implemented yet");
+                    }
+                    UserStatus::InSinglePlayerGame => {
+                        if self.state.single_player_game.get().status.ne(&BlackjackStatus::PlayerTurn) {
+                            panic!("not the player turn");
+                        }
+                        log::info!("Stand SinglePlayerGame");
+                        // TODO: implement stand
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -393,7 +428,7 @@ impl BlackjackContract {
 
         player.add_bet(amount, user_profile.balance);
     }
-    async fn deal_single_player(&mut self) {
+    async fn deal_draw_single_player(&mut self) {
         let profile = self.state.profile.get_mut();
         let seat_id = profile.seat;
         if seat_id.is_none() {
@@ -414,16 +449,11 @@ impl BlackjackContract {
 
         let blackjack_token_pool = self.state.blackjack_token_pool.get_mut();
         blackjack_token_pool.saturating_add_assign(bet_amount);
-    }
-    async fn draw_single_player(&mut self) {
-        let seat_id = self.state.profile.get().seat;
-        if seat_id.is_none() {
-            panic!("missing Player Seat ID");
-        }
 
         let blackjack_game = self.state.single_player_game.get_mut();
         blackjack_game.draw_initial_cards(seat_id.unwrap());
         blackjack_game.update_status(BlackjackStatus::PlayerTurn);
+        blackjack_game.pot.saturating_add_assign(bet_amount);
     }
     // * Play Chain
     fn channel_manager(&mut self, event: BlackjackEvent) {

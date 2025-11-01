@@ -3,7 +3,7 @@ use crate::deck::Deck;
 use crate::player_dealer::{Dealer, Player};
 use async_graphql::scalar;
 use async_graphql_derive::SimpleObject;
-use linera_sdk::linera_base_types::Timestamp;
+use linera_sdk::linera_base_types::{Amount, Timestamp};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -60,7 +60,7 @@ pub struct BlackjackGame {
     pub dealer: Dealer,
     pub players: HashMap<u8, Player>,
     pub deck: Deck,
-    pub pot: u64,
+    pub pot: Amount,
     pub active_seat: u8,
     pub status: BlackjackStatus,
     pub time_limit: Timestamp,
@@ -73,7 +73,7 @@ impl BlackjackGame {
             dealer: Dealer { hand: vec![] },
             players: HashMap::new(),
             deck: new_deck,
-            pot: 0,
+            pot: Amount::from_tokens(0),
             active_seat: 0,
             status: BlackjackStatus::WaitingForPlayer,
             time_limit: Timestamp::from(0),

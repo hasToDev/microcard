@@ -31,6 +31,8 @@ pub enum BlackjackOperation {
     GetBalance {},
     Bet { amount: Amount },
     Deal {},
+    Hit {},
+    Stand {},
     StartSinglePlayerGame {},
     // * Master Chain
     AddPlayChain { target_public_chain: ChainId, play_chain_id: ChainId },
