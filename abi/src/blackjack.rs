@@ -99,9 +99,23 @@ impl BlackjackGame {
     }
 
     pub fn data_for_channel(&self) -> Self {
+        // hide dealer hand until BlackjackStatus::DealerTurn
+        if self.status != BlackjackStatus::DealerTurn {
+            return BlackjackGame {
+                sequence: self.sequence,
+                dealer: Dealer::empty(),
+                players: self.players.clone(),
+                deck: Deck::empty(),
+                pot: self.pot,
+                active_seat: self.active_seat,
+                status: self.status.clone(),
+                time_limit: self.time_limit,
+            };
+        }
+
         BlackjackGame {
             sequence: self.sequence,
-            dealer: Dealer::empty(), // TODO: hide dealer hand until BlackjackStatus::DealerTurn
+            dealer: self.dealer,
             players: self.players.clone(),
             deck: Deck::empty(),
             pot: self.pot,
