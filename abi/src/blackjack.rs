@@ -139,7 +139,7 @@ impl BlackjackGame {
 
         BlackjackGame {
             sequence: self.sequence,
-            dealer: self.dealer,
+            dealer: self.dealer.clone(),
             players: self.players.clone(),
             deck: Deck::empty(),
             pot: self.pot,

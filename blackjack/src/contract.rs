@@ -4,7 +4,7 @@ mod state;
 
 use self::state::BlackjackState;
 use abi::blackjack::{BlackjackGame, BlackjackStatus, MutationReason, UserStatus, BLACKJACK_STREAM_NAME, MAX_BLACKJACK_PLAYERS};
-use abi::deck::{get_new_deck, Deck};
+use abi::deck::{calculate_hand_value, get_new_deck, Deck};
 use abi::player_dealer::Player;
 use abi::random::get_random_value;
 use bankroll::{BankrollOperation, BankrollResponse};
@@ -128,6 +128,7 @@ impl Contract for BlackjackContract {
                         }
                         log::info!("Deal SinglePlayerGame");
                         self.deal_draw_single_player().await;
+                        // TODO: check both dealer and players deck for Blackjack (21) in any of them
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -145,7 +146,7 @@ impl Contract for BlackjackContract {
                             panic!("not the player turn");
                         }
                         log::info!("Hit SinglePlayerGame");
-                        // TODO: implement hit
+                        self.hit_single_player().await;
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -508,5 +509,46 @@ impl BlackjackContract {
         self.state.play_chain_status.insert(&chain_id, player_number).unwrap_or_else(|_| {
             panic!("Failed to update Play Chain Status for {:?}", chain_id);
         });
+    }
+
+    // Hit operation: deal one card to player and calculate hand value
+    async fn hit_single_player(&mut self) {
+        // 1. Retrieve seat in profile state
+        let profile = self.state.profile.get();
+        let seat_id = profile.seat.expect("Player seat not found");
+
+        // 2. Retrieve single_player_game state
+        let single_player_game = self.state.single_player_game.get_mut();
+
+        // 3. Retrieve Player's object from single_player_game players based on the seat
+        let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
+
+        // 4. Deal one card from deck and insert it into Player's object hand
+        let card = single_player_game.deck.deal().expect("Deck ran out of cards");
+        player.hand.push(card);
+
+        // 5. Calculate the value in Player's object hand
+        let hand_value = calculate_hand_value(&player.hand);
+
+        log::info!("Player hit: drew card {}, hand value is now {}", card, hand_value);
+
+        // Check for win (exactly 21) or bust (over 21)
+        if hand_value == 21 {
+            self.handle_player_win().await;
+        } else if hand_value > 21 {
+            self.handle_player_bust().await;
+        }
+    }
+
+    // Template function for player win (hand value = 21)
+    async fn handle_player_win(&mut self) {
+        log::info!("Player wins with 21!");
+        // TODO: implement win logic
+    }
+
+    // Template function for player bust (hand value > 21)
+    async fn handle_player_bust(&mut self) {
+        log::info!("Player busts!");
+        // TODO: implement bust logic
     }
 }

@@ -62,3 +62,45 @@ pub fn get_new_deck(timestamp: String) -> Vec<u8> {
     new_deck.shuffle(&mut get_custom_rng(timestamp.clone(), timestamp).expect("Failed to get custom rng").clone());
     new_deck
 }
+
+/// Calculate the total value of a blackjack hand.
+///
+/// # Card Values:
+/// - Aces (1, 14, 27, 40): Counted as 11 or 1, whichever is better
+/// - Face cards (Jack, Queen, King): 10
+/// - Number cards (2-10): Their rank value
+///
+/// # Ace Handling:
+/// Aces are initially counted as 11. If the total exceeds 21,
+/// aces are converted to 1 until the hand is valid or all aces are adjusted.
+pub fn calculate_hand_value(hand: &Vec<u8>) -> u8 {
+    let mut total = 0u8;
+    let mut aces = 0u8;
+
+    for &card in hand {
+        let rank = ((card - 1) % 13) + 1; // Get rank 1-13 for each suit
+        match rank {
+            1 => {
+                // Ace
+                aces += 1;
+                total = total.saturating_add(11);
+            }
+            11 | 12 | 13 => {
+                // Jack, Queen, King
+                total = total.saturating_add(10);
+            }
+            _ => {
+                // Number cards 2-10
+                total = total.saturating_add(rank);
+            }
+        }
+    }
+
+    // Adjust for Aces if total exceeds 21
+    while total > 21 && aces > 0 {
+        total = total.saturating_sub(10); // Convert Ace from 11 to 1
+        aces -= 1;
+    }
+
+    total
+}
