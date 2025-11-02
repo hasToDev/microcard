@@ -61,7 +61,7 @@ pub struct BlackjackGame {
     pub players: HashMap<u8, Player>,
     pub deck: Deck,
     pub pot: Amount,
-    pub active_seat: u8,
+    pub active_seat: u8, // single player: 0, multi player: 1-3
     pub status: BlackjackStatus,
     pub time_limit: Timestamp,
 }
@@ -84,7 +84,7 @@ impl BlackjackGame {
         self.players.contains_key(&seat_id)
     }
 
-    pub fn register_player(&mut self, seat_id: u8, player: Player) {
+    pub fn register_update_player(&mut self, seat_id: u8, player: Player) {
         self.players.insert(seat_id, player);
     }
 

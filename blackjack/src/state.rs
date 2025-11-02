@@ -16,7 +16,7 @@ pub struct BlackjackState {
     pub play_chain_status: MapView<ChainId, u8>,
     // User Chain
     pub profile: RegisterView<Profile>,
-    pub player_seat_map: MapView<u8, Player>,
+    pub player_seat_map: MapView<u8, Player>, // whenever this updated, the one in BlackjackGame should be updated too
     pub user_status: RegisterView<UserStatus>,
     pub user_play_chain: RegisterView<Option<ChainId>>,
     pub find_play_chain_retry: RegisterView<u8>,

@@ -146,7 +146,14 @@ impl Contract for BlackjackContract {
                             panic!("not the player turn");
                         }
                         log::info!("Hit SinglePlayerGame");
-                        self.hit_single_player().await;
+                        let hand_value = self.hit_single_player().await;
+
+                        // Check for win (exactly 21) or bust (over 21)
+                        if hand_value == 21 {
+                            self.handle_player_win().await;
+                        } else if hand_value > 21 {
+                            self.handle_player_bust().await;
+                        }
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -376,7 +383,7 @@ impl BlackjackContract {
     fn add_user_to_new_single_player_game(&mut self) {
         let balance = self.state.profile.get().balance;
         let chain_id = self.runtime.chain_id();
-        let seat_id: u8 = 1;
+        let seat_id: u8 = 0; // always 0 for single player
         let new_player = Player::new(seat_id, balance, chain_id);
 
         self.state.player_seat_map.insert(&seat_id, new_player.clone()).unwrap_or_else(|_| {
@@ -387,7 +394,7 @@ impl BlackjackContract {
 
         let mut blackjack_game = self.create_single_player_blackjack_game();
         blackjack_game.update_status(BlackjackStatus::WaitingForBets);
-        blackjack_game.register_player(seat_id, new_player);
+        blackjack_game.register_update_player(seat_id, new_player);
         self.state.single_player_game.set(blackjack_game);
     }
     fn add_user_to_new_multi_player_game(&mut self, seat_id: u8) {
@@ -448,6 +455,10 @@ impl BlackjackContract {
         profile.update_balance(latest_balance);
         self.update_bankroll_balance(latest_balance);
 
+        if seat_id.unwrap().eq(&player.seat_id) {
+            player.current_player = true;
+        }
+
         let blackjack_token_pool = self.state.blackjack_token_pool.get_mut();
         blackjack_token_pool.saturating_add_assign(bet_amount);
 
@@ -455,6 +466,7 @@ impl BlackjackContract {
         blackjack_game.draw_initial_cards(seat_id.unwrap());
         blackjack_game.update_status(BlackjackStatus::PlayerTurn);
         blackjack_game.pot.saturating_add_assign(bet_amount);
+        blackjack_game.register_update_player(seat_id.unwrap(), *player);
     }
     // * Play Chain
     fn channel_manager(&mut self, event: BlackjackEvent) {
@@ -469,7 +481,7 @@ impl BlackjackContract {
         }
 
         let player = Player::new(seat_id, balance, origin_chain_id);
-        game.register_player(seat_id, player);
+        game.register_update_player(seat_id, player);
         self.message_manager(origin_chain_id, BlackjackMessage::RequestTableSeatResult { seat_id, success: true });
         Some(())
     }
@@ -512,32 +524,32 @@ impl BlackjackContract {
     }
 
     // Hit operation: deal one card to player and calculate hand value
-    async fn hit_single_player(&mut self) {
-        // 1. Retrieve seat in profile state
+    async fn hit_single_player(&mut self) -> u8 {
+        // Retrieve seat in profile state
         let profile = self.state.profile.get();
         let seat_id = profile.seat.expect("Player seat not found");
 
-        // 2. Retrieve single_player_game state
+        // Retrieve single_player_game state
         let single_player_game = self.state.single_player_game.get_mut();
 
-        // 3. Retrieve Player's object from single_player_game players based on the seat
+        // Retrieve Player's object from single_player_game players based on the seat
         let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
 
-        // 4. Deal one card from deck and insert it into Player's object hand
+        // Deal one card from deck and insert it into Player's object hand
         let card = single_player_game.deck.deal().expect("Deck ran out of cards");
         player.hand.push(card);
 
-        // 5. Calculate the value in Player's object hand
+        // Update player in player_seat_map
+        self.state.player_seat_map.insert(&seat_id, *player).unwrap_or_else(|_| {
+            panic!("Failed to update Player Seat Map on hit_single_player");
+        });
+
+        // Calculate the value in Player's object hand
         let hand_value = calculate_hand_value(&player.hand);
 
         log::info!("Player hit: drew card {}, hand value is now {}", card, hand_value);
 
-        // Check for win (exactly 21) or bust (over 21)
-        if hand_value == 21 {
-            self.handle_player_win().await;
-        } else if hand_value > 21 {
-            self.handle_player_bust().await;
-        }
+        hand_value
     }
 
     // Template function for player win (hand value = 21)
