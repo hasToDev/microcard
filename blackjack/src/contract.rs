@@ -451,13 +451,12 @@ impl BlackjackContract {
         let player_async = self.state.player_seat_map.get_mut(&seat_id.unwrap()).await;
         let player = player_async.expect("Player not found!").expect("Player not found!");
 
-        let (bet_amount, latest_balance) = player.deal(bet_data.clone().unwrap().min_bet, profile.balance);
-        profile.update_balance(latest_balance);
-        self.update_bankroll_balance(latest_balance);
-
         if seat_id.unwrap().eq(&player.seat_id) {
             player.current_player = true;
         }
+
+        let (bet_amount, latest_balance) = player.deal(bet_data.clone().unwrap().min_bet, profile.balance);
+        profile.update_balance(latest_balance);
 
         let blackjack_token_pool = self.state.blackjack_token_pool.get_mut();
         blackjack_token_pool.saturating_add_assign(bet_amount);
@@ -466,7 +465,9 @@ impl BlackjackContract {
         blackjack_game.draw_initial_cards(seat_id.unwrap());
         blackjack_game.update_status(BlackjackStatus::PlayerTurn);
         blackjack_game.pot.saturating_add_assign(bet_amount);
-        blackjack_game.register_update_player(seat_id.unwrap(), *player);
+        blackjack_game.register_update_player(seat_id.unwrap(), player.clone());
+
+        self.update_bankroll_balance(latest_balance);
     }
     // * Play Chain
     fn channel_manager(&mut self, event: BlackjackEvent) {
@@ -540,7 +541,7 @@ impl BlackjackContract {
         player.hand.push(card);
 
         // Update player in player_seat_map
-        self.state.player_seat_map.insert(&seat_id, *player).unwrap_or_else(|_| {
+        self.state.player_seat_map.insert(&seat_id, player.clone()).unwrap_or_else(|_| {
             panic!("Failed to update Player Seat Map on hit_single_player");
         });
 
