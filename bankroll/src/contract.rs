@@ -57,19 +57,22 @@ impl Contract for BankrollContract {
                     panic!("unable to update {:?} balance", owner);
                 });
 
+                log::info!("BankrollOperation::Balance returning balance: {} for owner: {:?}", balance, owner);
                 BankrollResponse::Balance(balance)
             }
             BankrollOperation::UpdateBalance { owner, amount } => {
-                log::info!("BankrollOperation::UpdateBalance request from {:?}", owner);
+                log::info!("BankrollOperation::UpdateBalance request from {:?}, updating balance to: {}", owner, amount);
 
                 self.state.accounts.insert(&owner, amount).unwrap_or_else(|_| {
                     panic!("unable to update {:?} balance", owner);
                 });
 
+                log::info!("BankrollOperation::UpdateBalance completed for owner: {:?}, new balance: {}", owner, amount);
                 BankrollResponse::Ok
             }
             BankrollOperation::NotifyDebt { amount, target_chain } => {
-                log::info!("BankrollOperation::NotifyDebt request from {:?}", self.runtime.authenticated_signer());
+                log::info!("BankrollOperation::NotifyDebt request from {:?}, amount: {}, target_chain: {:?}",
+                    self.runtime.authenticated_signer(), amount, target_chain);
 
                 let user_chain = self.runtime.chain_id();
                 let created_at = self.runtime.system_time();
@@ -92,12 +95,15 @@ impl Contract for BankrollContract {
                 log::info!("Created debt record: {:?}", debt_record);
 
                 self.message_manager(target_chain, BankrollMessage::DebtNotif { debt_id, amount, created_at });
+                log::info!("Sent DebtNotif message to target_chain: {:?}, debt_id: {}", target_chain, debt_id);
                 BankrollResponse::Ok
             }
             BankrollOperation::TransferTokenPot { amount, target_chain } => {
-                log::info!("BankrollOperation::TransferTokenPot request from {:?}", self.runtime.authenticated_signer());
+                log::info!("BankrollOperation::TransferTokenPot request from {:?}, amount: {}, target_chain: {:?}",
+                    self.runtime.authenticated_signer(), amount, target_chain);
 
                 self.message_manager(target_chain, BankrollMessage::TokenPot { amount });
+                log::info!("Sent TokenPot message to target_chain: {:?}, amount: {}", target_chain, amount);
                 BankrollResponse::Ok
             }
             // * Master Chain
@@ -107,8 +113,10 @@ impl Contract for BankrollContract {
                     self.runtime.application_parameters().master_chain,
                     "MasterChain Authorization Required for BankrollOperation::MintToken"
                 );
-                log::info!("BankrollOperation::MintToken request from {:?}", self.runtime.authenticated_signer());
+                log::info!("BankrollOperation::MintToken request from {:?}, minting {} tokens for chain: {:?}",
+                    self.runtime.authenticated_signer(), amount, chain_id);
                 self.message_manager(chain_id, BankrollMessage::ReceivedToken { amount });
+                log::info!("Sent ReceivedToken message to chain: {:?}, amount: {}", chain_id, amount);
                 BankrollResponse::Ok
             }
         }
@@ -120,9 +128,11 @@ impl Contract for BankrollContract {
         match message {
             // * Public Chain
             BankrollMessage::ReceivedToken { amount } => {
-                log::info!("BankrollMessage::ReceivedToken from {:?} at {:?}", origin_chain_id, self.runtime.chain_id());
+                log::info!("BankrollMessage::ReceivedToken from {:?} at {:?}, amount: {}", origin_chain_id, self.runtime.chain_id(), amount);
                 let current_token = self.state.blackjack_token.get_mut();
+                let previous_balance = *current_token;
                 current_token.saturating_add_assign(amount);
+                log::info!("Token balance updated: {} -> {}", previous_balance, current_token);
             }
             BankrollMessage::DebtNotif { debt_id, amount, created_at } => {
                 log::info!(
@@ -135,6 +145,7 @@ impl Contract for BankrollContract {
 
                 // Verify we have sufficient tokens
                 let current_token = self.state.blackjack_token.get();
+                log::info!("Current token pool before debt payment: {}", current_token);
                 assert!(
                     *current_token >= amount,
                     "Insufficient tokens to pay debt. Available: {}, Required: {}",
@@ -147,7 +158,8 @@ impl Contract for BankrollContract {
                 self.state.blackjack_token.set(remaining_token);
 
                 log::info!(
-                    "Debt payment processed. Remaining tokens: {}. Sending DebtPaid to {:?}",
+                    "Debt payment processed. Token pool: {} -> {}. Sending DebtPaid to {:?}",
+                    current_token,
                     remaining_token,
                     origin_chain_id
                 );
