@@ -156,13 +156,24 @@ impl Contract for BlackjackContract {
                             panic!("not the player turn");
                         }
                         log::info!("Hit SinglePlayerGame");
-                        let hand_value = self.hit_single_player().await;
+                        let outcome = self.hit_single_player().await;
 
-                        // Check for win (exactly 21) or bust (over 21)
-                        if hand_value == 21 {
-                            self.handle_player_win().await;
-                        } else if hand_value > 21 {
-                            self.handle_player_bust().await;
+                        // call handler based on outcome
+                        match outcome {
+                            GameOutcome::PlayerWins => {
+                                self.handle_player_win().await;
+                            }
+                            GameOutcome::DealerWins => {
+                                self.handle_player_bust().await;
+                            }
+                            GameOutcome::None => {
+                                // Update single_player_game state sequence
+                                let single_player_game = self.state.single_player_game.get_mut();
+                                single_player_game.sequence = single_player_game.sequence.saturating_add(1);
+                            }
+                            _ => {
+                                panic!("BlackjackOperation::Hit have unexpected outcome!");
+                            }
                         }
                     }
                     _ => {
@@ -193,6 +204,9 @@ impl Contract for BlackjackContract {
                             }
                             GameOutcome::Draw => {
                                 self.handle_player_draw().await;
+                            }
+                            _ => {
+                                panic!("BlackjackOperation::Stand have unexpected outcome!");
                             }
                         }
                     }
@@ -455,6 +469,7 @@ impl BlackjackContract {
         let mut blackjack_game = self.create_single_player_blackjack_game();
         blackjack_game.update_status(BlackjackStatus::WaitingForBets);
         blackjack_game.register_update_player(seat_id, new_player);
+        blackjack_game.sequence = blackjack_game.sequence.saturating_add(1);
         self.state.single_player_game.set(blackjack_game.clone());
         log::info!("Single player game created successfully - status: {:?}", blackjack_game.status);
     }
@@ -549,9 +564,11 @@ impl BlackjackContract {
         blackjack_game.update_status(BlackjackStatus::PlayerTurn);
         blackjack_game.pot.saturating_add_assign(bet_amount);
         blackjack_game.register_update_player(seat_id.unwrap(), player.clone());
+        blackjack_game.sequence = blackjack_game.sequence.saturating_add(1);
+
+        log::info!("Deal complete - game pot: {}, player balance: {}", blackjack_game.pot, latest_balance);
 
         self.bankroll_update_balance(latest_balance);
-        log::info!("Deal complete - game pot: {}, player balance: {}", blackjack_game.pot, latest_balance);
     }
     // * Play Chain
     fn event_manager(&mut self, event: BlackjackEvent) {
@@ -618,7 +635,7 @@ impl BlackjackContract {
     }
 
     // Hit operation: deal one card to player and calculate hand value
-    async fn hit_single_player(&mut self) -> u8 {
+    async fn hit_single_player(&mut self) -> GameOutcome {
         // Retrieve seat in profile state
         let profile = self.state.profile.get();
         let seat_id = profile.seat.expect("Player seat not found");
@@ -643,7 +660,21 @@ impl BlackjackContract {
 
         log::info!("Player hit: drew card {}, hand value is now {}", card, hand_value);
 
-        hand_value
+        let outcome = if hand_value > 21 {
+            // Player busts
+            log::info!("Player busts with {}", hand_value);
+            GameOutcome::DealerWins
+        } else if hand_value == 21 {
+            // Player win
+            log::info!("Player wins with {}", hand_value);
+            GameOutcome::PlayerWins
+        } else {
+            // No outcome, player can keep dealing or choose to stand
+            log::info!("Player hand value is {}", hand_value);
+            GameOutcome::None
+        };
+
+        outcome
     }
 
     // Handle player win (hand value = 21)
@@ -656,6 +687,7 @@ impl BlackjackContract {
         // Get player and calculate winnings (2:1 payout)
         let single_player_game = self.state.single_player_game.get_mut();
         single_player_game.update_status(BlackjackStatus::Ended);
+        single_player_game.sequence = single_player_game.sequence.saturating_add(1);
         let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
 
         // Player gets back bet + equal winnings
@@ -741,6 +773,7 @@ impl BlackjackContract {
         // Update game status
         let game = self.state.single_player_game.get_mut();
         game.update_status(BlackjackStatus::Ended);
+        game.sequence = game.sequence.saturating_add(1);
 
         log::info!("Player bust processed successfully");
     }
@@ -755,6 +788,7 @@ impl BlackjackContract {
         // Get player's bet amount
         let single_player_game = self.state.single_player_game.get_mut();
         single_player_game.update_status(BlackjackStatus::Ended);
+        single_player_game.sequence = single_player_game.sequence.saturating_add(1);
         let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
 
         // Player gets back their bet (no winnings, no loss)

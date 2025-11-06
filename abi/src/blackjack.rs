@@ -55,6 +55,7 @@ pub enum GameOutcome {
     PlayerWins = 0,
     DealerWins = 1,
     Draw = 3,
+    None = 4,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
