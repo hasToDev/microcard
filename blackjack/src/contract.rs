@@ -285,7 +285,7 @@ impl Contract for BlackjackContract {
             BlackjackMessage::RequestTableSeat { seat_id, balance } => {
                 if self.request_table_seat_manager(seat_id, balance, origin_chain_id).is_some() {
                     let game = self.state.game.get();
-                    self.channel_manager(BlackjackEvent::GameState { game: game.data_for_channel() })
+                    self.event_manager(BlackjackEvent::GameState { game: game.data_for_event() })
                 }
                 log::info!("\nUser {:?} RequestTableSeat to Play Chain {:?}\n", origin_chain_id, self.runtime.chain_id());
             }
@@ -495,7 +495,7 @@ impl BlackjackContract {
         self.bankroll_update_balance(latest_balance);
     }
     // * Play Chain
-    fn channel_manager(&mut self, event: BlackjackEvent) {
+    fn event_manager(&mut self, event: BlackjackEvent) {
         self.runtime.emit(BLACKJACK_STREAM_NAME.into(), &event);
     }
     fn request_table_seat_manager(&mut self, seat_id: u8, balance: Amount, origin_chain_id: ChainId) -> Option<()> {
