@@ -60,7 +60,11 @@ impl Contract for BlackjackContract {
             }
             BlackjackOperation::FindPlayChain {} => {
                 log::info!("BlackjackOperation::FindPlayChain");
-                // TODO: make UserStatus check to prevent double calling FindPlayChain
+
+                if self.state.user_status.get().eq(&UserStatus::FindPlayChain) {
+                    panic!("still waiting response from previous FindPlayChain");
+                }
+
                 let chain_id = self.get_public_chain();
                 log::info!("Selected public chain: {:?} for FindPlayChain query", chain_id);
                 self.state.user_status.set(UserStatus::FindPlayChain);
