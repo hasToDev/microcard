@@ -1,3 +1,4 @@
+use async_graphql::scalar;
 use async_graphql::{Request, Response, SimpleObject};
 use linera_sdk::linera_base_types::{AccountOwner, Amount, ChainId, Timestamp};
 use linera_sdk::{
@@ -24,6 +25,8 @@ pub enum BankrollOperation {
     // * User Chain
     Balance { owner: AccountOwner },
     UpdateBalance { owner: AccountOwner, amount: Amount },
+    NotifyDebt { amount: Amount, target_chain: ChainId },
+    TransferTokenPot { amount: Amount, target_chain: ChainId },
     // * Master Chain
     MintToken { chain_id: ChainId, amount: Amount },
 }
@@ -31,7 +34,25 @@ pub enum BankrollOperation {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BankrollMessage {
     // * Public Chain
-    ReceivedToken { amount: Amount },
+    ReceivedToken {
+        amount: Amount,
+    },
+    DebtPaid {
+        debt_id: u64,
+        amount: Amount,
+        paid_at: Timestamp,
+    },
+    // * Master Chain
+    DebtNotif {
+        debt_id: u64,
+        user_chain: ChainId,
+        amount: Amount,
+        created_at: Timestamp,
+    },
+    TokenPot {
+        user_chain: ChainId,
+        amount: Amount,
+    },
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -70,6 +91,24 @@ impl DailyBonus {
         }
         Amount::ZERO
     }
+}
+
+scalar!(DebtStatus);
+#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize)]
+#[repr(u8)]
+pub enum DebtStatus {
+    Pending = 0,
+    Paid = 1,
+}
+
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
+pub struct DebtRecord {
+    pub id: u64,
+    pub user_chain: ChainId,
+    pub amount: Amount,
+    pub created_at: Timestamp,
+    pub paid_at: Option<Timestamp>,
+    pub status: DebtStatus,
 }
 
 const ONE_DAY_CLAIM_DURATION_IN_MICROS: u64 = 60 * 60 * 24 * 1_000_000;

@@ -3,7 +3,7 @@
 mod state;
 
 use self::state::BankrollState;
-use bankroll::{BankrollMessage, BankrollOperation, BankrollParameters, BankrollResponse};
+use bankroll::{BankrollMessage, BankrollOperation, BankrollParameters, BankrollResponse, DebtRecord, DebtStatus};
 use linera_sdk::linera_base_types::ChainId;
 use linera_sdk::{
     linera_base_types::WithContractAbi,
@@ -68,6 +68,47 @@ impl Contract for BankrollContract {
 
                 BankrollResponse::Ok
             }
+            BankrollOperation::NotifyDebt { amount, target_chain } => {
+                log::info!("BankrollOperation::NotifyDebt request from {:?}", self.runtime.authenticated_signer());
+
+                let user_chain = self.runtime.chain_id();
+                let timestamp = self.runtime.system_time();
+                let debt_id = self.runtime.system_time().micros();
+
+                // Create debt record before sending notification
+                let debt_record = DebtRecord {
+                    id: debt_id,
+                    user_chain,
+                    amount,
+                    created_at: timestamp,
+                    paid_at: None,
+                    status: DebtStatus::Pending,
+                };
+
+                self.state.debt_log.insert(&debt_id, debt_record.clone()).unwrap_or_else(|_| {
+                    panic!("Failed to create debt record for debt_id: {}", debt_id);
+                });
+
+                log::info!("Created debt record: {:?}", debt_record);
+
+                self.message_manager(
+                    target_chain,
+                    BankrollMessage::DebtNotif {
+                        debt_id,
+                        user_chain,
+                        amount,
+                        created_at: timestamp,
+                    },
+                );
+                BankrollResponse::Ok
+            }
+            BankrollOperation::TransferTokenPot { amount, target_chain } => {
+                log::info!("BankrollOperation::TransferTokenPot request from {:?}", self.runtime.authenticated_signer());
+
+                let user_chain = self.runtime.chain_id();
+                self.message_manager(target_chain, BankrollMessage::TokenPot { user_chain, amount });
+                BankrollResponse::Ok
+            }
             // * Master Chain
             BankrollOperation::MintToken { chain_id, amount } => {
                 assert_eq!(
@@ -89,8 +130,87 @@ impl Contract for BankrollContract {
             // * Public Chain
             BankrollMessage::ReceivedToken { amount } => {
                 log::info!("BankrollMessage::ReceivedToken from {:?} at {:?}", origin_chain_id, self.runtime.chain_id());
-                let current_token = self.state.token.get_mut();
+                let current_token = self.state.blackjack_token.get_mut();
                 current_token.saturating_add_assign(amount);
+            }
+            BankrollMessage::DebtNotif {
+                debt_id,
+                user_chain,
+                amount,
+                created_at,
+            } => {
+                log::info!(
+                    "BankrollMessage::DebtNotif debt_id: {} from user_chain: {:?} amount: {} at {:?}",
+                    debt_id,
+                    user_chain,
+                    amount,
+                    self.runtime.chain_id()
+                );
+
+                // Verify we have sufficient tokens
+                let current_token = self.state.blackjack_token.get();
+                assert!(
+                    *current_token >= amount,
+                    "Insufficient tokens to pay debt. Available: {}, Required: {}",
+                    current_token,
+                    amount
+                );
+
+                // Subtract the debt amount from blackjack_token pool
+                let remaining_token = current_token.saturating_sub(amount);
+                self.state.blackjack_token.set(remaining_token);
+
+                log::info!(
+                    "Debt payment processed. Remaining tokens: {}. Sending DebtPaid to {:?}",
+                    remaining_token,
+                    user_chain
+                );
+
+                // Send DebtPaid message back to the user chain
+                let paid_at = self.runtime.system_time();
+                self.message_manager(user_chain, BankrollMessage::DebtPaid { debt_id, amount, paid_at });
+
+                // Log debt history
+                let debt_record = DebtRecord {
+                    id: debt_id,
+                    user_chain,
+                    amount,
+                    created_at,
+                    paid_at: Some(paid_at),
+                    status: DebtStatus::Paid,
+                };
+                self.state.debt_log.insert(&debt_id, debt_record.clone()).unwrap_or_else(|_| {
+                    panic!("Failed to create debt record for debt_id: {}", debt_id);
+                });
+            }
+            BankrollMessage::TokenPot { user_chain, amount } => {
+                log::info!(
+                    "BankrollMessage::TokenPot from {:?} amount: {} at {:?}",
+                    user_chain,
+                    amount,
+                    self.runtime.chain_id()
+                );
+
+                // Add the pot amount to blackjack_token pool
+                let current_token = self.state.blackjack_token.get_mut();
+                current_token.saturating_add_assign(amount);
+
+                log::info!("Token pot received. New total tokens: {}", current_token);
+            }
+            // * User Chain
+            BankrollMessage::DebtPaid { debt_id, amount, paid_at } => {
+                log::info!(
+                    "BankrollMessage::DebtPaid debt_id: {} amount: {} timestamp: {:?} at {:?}",
+                    debt_id,
+                    amount,
+                    paid_at,
+                    self.runtime.chain_id()
+                );
+
+                // Remove the debt from the log
+                self.state.debt_log.remove(&debt_id).expect("Failed to remove debt record");
+
+                log::info!("Debt {} successfully cleared", debt_id);
             }
         }
     }

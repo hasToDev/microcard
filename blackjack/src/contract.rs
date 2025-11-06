@@ -85,7 +85,7 @@ impl Contract for BlackjackContract {
             }
             BlackjackOperation::GetBalance {} => {
                 log::info!("BlackjackOperation::GetBalance");
-                let balance = self.get_bankroll_balance();
+                let balance = self.bankroll_get_balance();
                 log::info!("Current Balance is {:?}", balance);
             }
             BlackjackOperation::Bet { amount } => {
@@ -172,6 +172,7 @@ impl Contract for BlackjackContract {
                         }
                         log::info!("Stand SinglePlayerGame");
                         // TODO: implement stand
+                        // TODO: CONTINUE HERE
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -306,7 +307,7 @@ impl BlackjackContract {
         self.runtime.prepare_message(message).with_tracking().send_to(destination);
     }
 
-    fn get_bankroll_balance(&mut self) -> Amount {
+    fn bankroll_get_balance(&mut self) -> Amount {
         let owner = self.runtime.application_id().into();
         let bankroll_app_id = self.runtime.application_parameters().bankroll;
         let response = self.runtime.call_application(true, bankroll_app_id, &BankrollOperation::Balance { owner });
@@ -316,11 +317,23 @@ impl BlackjackContract {
         }
     }
 
-    fn update_bankroll_balance(&mut self, amount: Amount) {
+    fn bankroll_update_balance(&mut self, amount: Amount) {
         let owner = self.runtime.application_id().into();
         let bankroll_app_id = self.runtime.application_parameters().bankroll;
         self.runtime
             .call_application(true, bankroll_app_id, &BankrollOperation::UpdateBalance { owner, amount });
+    }
+
+    fn bankroll_notify_debt(&mut self, amount: Amount, target_chain: ChainId) {
+        let bankroll_app_id = self.runtime.application_parameters().bankroll;
+        self.runtime
+            .call_application(true, bankroll_app_id, &BankrollOperation::NotifyDebt { amount, target_chain });
+    }
+
+    fn bankroll_transfer_token_pot(&mut self, amount: Amount, target_chain: ChainId) {
+        let bankroll_app_id = self.runtime.application_parameters().bankroll;
+        self.runtime
+            .call_application(true, bankroll_app_id, &BankrollOperation::TransferTokenPot { amount, target_chain });
     }
 
     // * User Chain
@@ -336,7 +349,7 @@ impl BlackjackContract {
         BlackjackGame::new(Deck::with_cards(new_card_stack))
     }
     fn update_profile_balance_and_bet_data(&mut self) {
-        let balance = self.get_bankroll_balance();
+        let balance = self.bankroll_get_balance();
         let profile = self.state.profile.get_mut();
         profile.update_balance(balance);
         profile.calculate_bet_data();
@@ -467,7 +480,7 @@ impl BlackjackContract {
         blackjack_game.pot.saturating_add_assign(bet_amount);
         blackjack_game.register_update_player(seat_id.unwrap(), player.clone());
 
-        self.update_bankroll_balance(latest_balance);
+        self.bankroll_update_balance(latest_balance);
     }
     // * Play Chain
     fn channel_manager(&mut self, event: BlackjackEvent) {
@@ -553,15 +566,102 @@ impl BlackjackContract {
         hand_value
     }
 
-    // Template function for player win (hand value = 21)
+    // Handle player win (hand value = 21)
     async fn handle_player_win(&mut self) {
         log::info!("Player wins with 21!");
-        // TODO: implement win logic
+
+        let profile = self.state.profile.get();
+        let seat_id = profile.seat.expect("Player seat not found");
+
+        // Get player and calculate winnings (2:1 payout)
+        let single_player_game = self.state.single_player_game.get_mut();
+        single_player_game.update_status(BlackjackStatus::Ended);
+        let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
+
+        // Player gets back bet + equal winnings
+        let bet_amount = player.bet;
+        let winnings = bet_amount.saturating_mul(2);
+
+        log::info!("Player bet: {}, winnings: {}", bet_amount, winnings);
+
+        // Check blackjack_token_pool availability
+        let blackjack_token_pool = self.state.blackjack_token_pool.get();
+
+        if *blackjack_token_pool >= winnings {
+            // Sufficient funds in pool - pay normally
+            log::info!("Sufficient pool funds. Paying {} from pool of {}", winnings, blackjack_token_pool);
+
+            // Subtract winning amount from pool
+            let remaining_token = blackjack_token_pool.saturating_sub(winnings);
+            self.state.blackjack_token_pool.set(remaining_token);
+
+            // Update player balance
+            let new_balance = profile.balance.saturating_add(winnings);
+            self.state.profile.get_mut().update_balance(new_balance);
+            player.balance = new_balance;
+
+            self.state.player_seat_map.insert(&seat_id, player.clone()).unwrap_or_else(|_| {
+                panic!("Failed to update Player Seat Map on handle_player_win");
+            });
+
+            self.bankroll_update_balance(new_balance);
+
+            log::info!("Player paid. New balance: {}, Remaining pool: {}", new_balance, remaining_token);
+        } else {
+            // Insufficient funds - pay what's available and create debt
+            let available = *blackjack_token_pool;
+            let debt_amount = winnings.saturating_sub(available);
+
+            log::info!("Insufficient funds! Available: {}, Required: {}, Debt: {}", available, winnings, debt_amount);
+
+            // Pay player the winning amount
+            let new_balance = profile.balance.saturating_add(winnings);
+            self.state.profile.get_mut().update_balance(new_balance);
+            player.balance = new_balance;
+
+            self.state.player_seat_map.insert(&seat_id, player.clone()).unwrap_or_else(|_| {
+                panic!("Failed to update Player Seat Map on handle_player_win");
+            });
+
+            self.bankroll_update_balance(new_balance);
+
+            // Create debt by calling Bankroll
+            let token_pool_address = self.state.token_pool_address.get().expect("Token pool address not set");
+            self.bankroll_notify_debt(debt_amount, token_pool_address);
+
+            // Ensure pool is empty
+            self.state.blackjack_token_pool.set(Amount::ZERO);
+        }
+
+        log::info!("Player win processed successfully");
     }
 
-    // Template function for player bust (hand value > 21)
+    // Handle player bust (hand value > 21)
     async fn handle_player_bust(&mut self) {
         log::info!("Player busts!");
-        // TODO: implement bust logic
+
+        // Player loses - transfer entire pot to public chain
+        let pot_amount = *self.state.blackjack_token_pool.get();
+
+        if pot_amount > Amount::ZERO {
+            log::info!("Transferring pot to public chain. Amount: {}", pot_amount);
+
+            // Call Bankroll to transfer pot
+            let token_pool_address = self.state.token_pool_address.get().expect("Token pool address not set");
+            self.bankroll_transfer_token_pot(pot_amount, token_pool_address);
+
+            // Reset pool to zero
+            self.state.blackjack_token_pool.set(Amount::ZERO);
+
+            log::info!("Token pot transferred. Amount: {}, Target: {:?}", pot_amount, token_pool_address);
+        } else {
+            log::info!("No tokens in pot to transfer");
+        }
+
+        // Update game status
+        let game = self.state.single_player_game.get_mut();
+        game.update_status(BlackjackStatus::Ended);
+
+        log::info!("Player bust processed successfully");
     }
 }
