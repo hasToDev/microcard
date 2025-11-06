@@ -3,7 +3,7 @@
 mod state;
 
 use self::state::BlackjackState;
-use abi::blackjack::{BlackjackGame, BlackjackStatus, MutationReason, UserStatus, BLACKJACK_STREAM_NAME, MAX_BLACKJACK_PLAYERS};
+use abi::blackjack::{BlackjackGame, BlackjackStatus, GameOutcome, MutationReason, UserStatus, BLACKJACK_STREAM_NAME, MAX_BLACKJACK_PLAYERS};
 use abi::deck::{calculate_hand_value, get_new_deck, Deck};
 use abi::player_dealer::Player;
 use abi::random::get_random_value;
@@ -171,8 +171,20 @@ impl Contract for BlackjackContract {
                             panic!("not the player turn");
                         }
                         log::info!("Stand SinglePlayerGame");
-                        // TODO: implement stand
-                        // TODO: CONTINUE HERE
+                        let outcome = self.stand_single_player().await;
+
+                        // call handler based on outcome
+                        match outcome {
+                            GameOutcome::PlayerWins => {
+                                self.handle_player_win().await;
+                            }
+                            GameOutcome::DealerWins => {
+                                self.handle_player_bust().await;
+                            }
+                            GameOutcome::Draw => {
+                                self.handle_player_draw().await;
+                            }
+                        }
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -663,5 +675,130 @@ impl BlackjackContract {
         game.update_status(BlackjackStatus::Ended);
 
         log::info!("Player bust processed successfully");
+    }
+
+    // Handle player draw (same hand value as dealer)
+    async fn handle_player_draw(&mut self) {
+        log::info!("It's a draw!");
+
+        let profile = self.state.profile.get();
+        let seat_id = profile.seat.expect("Player seat not found");
+
+        // Get player's bet amount
+        let single_player_game = self.state.single_player_game.get_mut();
+        single_player_game.update_status(BlackjackStatus::Ended);
+        let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
+
+        // Player gets back their bet (no winnings, no loss)
+        let bet_amount = player.bet;
+
+        log::info!("Player bet: {}, returning bet amount", bet_amount);
+
+        // Check blackjack_token_pool availability
+        let blackjack_token_pool = self.state.blackjack_token_pool.get();
+
+        if *blackjack_token_pool >= bet_amount {
+            // Sufficient funds in pool - return bet
+            log::info!("Sufficient pool funds. Returning {} from pool of {}", bet_amount, blackjack_token_pool);
+
+            // Subtract bet amount from pool
+            let remaining_token = blackjack_token_pool.saturating_sub(bet_amount);
+            self.state.blackjack_token_pool.set(remaining_token);
+
+            // Update player balance (return bet)
+            let new_balance = profile.balance.saturating_add(bet_amount);
+            self.state.profile.get_mut().update_balance(new_balance);
+            player.balance = new_balance;
+
+            self.state.player_seat_map.insert(&seat_id, player.clone()).unwrap_or_else(|_| {
+                panic!("Failed to update Player Seat Map on handle_player_draw");
+            });
+
+            self.bankroll_update_balance(new_balance);
+
+            log::info!("Bet returned. New balance: {}, Remaining pool: {}", new_balance, remaining_token);
+        } else {
+            // Insufficient funds - return what's available and create debt
+            let available = *blackjack_token_pool;
+            let debt_amount = bet_amount.saturating_sub(available);
+
+            log::info!("Insufficient funds! Available: {}, Required: {}, Debt: {}", available, bet_amount, debt_amount);
+
+            // Return bet to player
+            let new_balance = profile.balance.saturating_add(bet_amount);
+            self.state.profile.get_mut().update_balance(new_balance);
+            player.balance = new_balance;
+
+            self.state.player_seat_map.insert(&seat_id, player.clone()).unwrap_or_else(|_| {
+                panic!("Failed to update Player Seat Map on handle_player_draw");
+            });
+
+            self.bankroll_update_balance(new_balance);
+
+            // Create debt by calling Bankroll
+            let token_pool_address = self.state.token_pool_address.get().expect("Token pool address not set");
+            self.bankroll_notify_debt(debt_amount, token_pool_address);
+
+            // Ensure pool is empty
+            self.state.blackjack_token_pool.set(Amount::ZERO);
+        }
+
+        log::info!("Draw processed successfully");
+    }
+
+    // Stand operation: dealer draws cards and compare hands
+    async fn stand_single_player(&mut self) -> GameOutcome {
+        log::info!("Processing stand operation");
+
+        // Retrieve single_player_game state
+        let single_player_game = self.state.single_player_game.get_mut();
+
+        // Update status to DealerTurn
+        single_player_game.update_status(BlackjackStatus::DealerTurn);
+
+        // Calculate dealer hand value
+        let mut dealer_hand_value = calculate_hand_value(&single_player_game.dealer.hand);
+        log::info!("Initial dealer hand value: {}", dealer_hand_value);
+
+        // Keep dealing cards to dealer if hand value is lower than 17
+        while dealer_hand_value < 17 {
+            let card = single_player_game.deck.deal().expect("Deck ran out of cards");
+            single_player_game.dealer.hand.push(card);
+            dealer_hand_value = calculate_hand_value(&single_player_game.dealer.hand);
+            log::info!("Dealer drew card {}, hand value is now {}", card, dealer_hand_value);
+        }
+
+        log::info!("Dealer finished drawing. Final hand value: {}", dealer_hand_value);
+
+        let profile = self.state.profile.get();
+        let seat_id = profile.seat.expect("Player seat not found");
+        let player = single_player_game.players.get(&seat_id).expect("Player not found in single player game");
+
+        // Calculate the Player's hand value
+        let player_hand_value = calculate_hand_value(&player.hand);
+        log::info!("Player hand value: {}", player_hand_value);
+
+        // Compare both Player and Dealer hand value based on Blackjack rules
+        let outcome = if dealer_hand_value > 21 {
+            // Dealer busts, player wins
+            log::info!("Dealer busts with {}", dealer_hand_value);
+            GameOutcome::PlayerWins
+        } else if player_hand_value > dealer_hand_value {
+            // Player has higher hand value
+            log::info!("Player wins: {} vs {}", player_hand_value, dealer_hand_value);
+            GameOutcome::PlayerWins
+        } else if dealer_hand_value > player_hand_value {
+            // Dealer has higher hand value
+            log::info!("Dealer wins: {} vs {}", dealer_hand_value, player_hand_value);
+            GameOutcome::DealerWins
+        } else {
+            // Same hand value
+            log::info!("Draw: both have {}", player_hand_value);
+            GameOutcome::Draw
+        };
+
+        log::info!("Stand operation completed. Outcome: {:?}", outcome);
+
+        outcome
     }
 }

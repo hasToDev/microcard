@@ -48,6 +48,15 @@ pub enum UserStatus {
     InSinglePlayerGame = 7,
 }
 
+scalar!(GameOutcome);
+#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize)]
+#[repr(u8)]
+pub enum GameOutcome {
+    PlayerWins = 0,
+    DealerWins = 1,
+    Draw = 3,
+}
+
 #[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
 pub struct GameData {
     pub profile: Profile,
