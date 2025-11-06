@@ -34,25 +34,11 @@ pub enum BankrollOperation {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BankrollMessage {
     // * Public Chain
-    ReceivedToken {
-        amount: Amount,
-    },
-    DebtPaid {
-        debt_id: u64,
-        amount: Amount,
-        paid_at: Timestamp,
-    },
+    ReceivedToken { amount: Amount },
+    DebtPaid { debt_id: u64, amount: Amount, paid_at: Timestamp },
     // * Master Chain
-    DebtNotif {
-        debt_id: u64,
-        user_chain: ChainId,
-        amount: Amount,
-        created_at: Timestamp,
-    },
-    TokenPot {
-        user_chain: ChainId,
-        amount: Amount,
-    },
+    DebtNotif { debt_id: u64, amount: Amount, created_at: Timestamp },
+    TokenPot { amount: Amount },
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -109,6 +95,14 @@ pub struct DebtRecord {
     pub created_at: Timestamp,
     pub paid_at: Option<Timestamp>,
     pub status: DebtStatus,
+}
+
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
+pub struct TokenPotRecord {
+    pub id: u64,
+    pub user_chain: ChainId,
+    pub amount: Amount,
+    pub created_at: Timestamp,
 }
 
 const ONE_DAY_CLAIM_DURATION_IN_MICROS: u64 = 60 * 60 * 24 * 1_000_000;

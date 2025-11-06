@@ -3,7 +3,7 @@
 mod state;
 
 use self::state::BankrollState;
-use bankroll::{BankrollMessage, BankrollOperation, BankrollParameters, BankrollResponse, DebtRecord, DebtStatus};
+use bankroll::{BankrollMessage, BankrollOperation, BankrollParameters, BankrollResponse, DebtRecord, DebtStatus, TokenPotRecord};
 use linera_sdk::linera_base_types::ChainId;
 use linera_sdk::{
     linera_base_types::WithContractAbi,
@@ -72,15 +72,15 @@ impl Contract for BankrollContract {
                 log::info!("BankrollOperation::NotifyDebt request from {:?}", self.runtime.authenticated_signer());
 
                 let user_chain = self.runtime.chain_id();
-                let timestamp = self.runtime.system_time();
-                let debt_id = self.runtime.system_time().micros();
+                let created_at = self.runtime.system_time();
+                let debt_id = created_at.micros();
 
                 // Create debt record before sending notification
                 let debt_record = DebtRecord {
                     id: debt_id,
                     user_chain,
                     amount,
-                    created_at: timestamp,
+                    created_at,
                     paid_at: None,
                     status: DebtStatus::Pending,
                 };
@@ -91,22 +91,13 @@ impl Contract for BankrollContract {
 
                 log::info!("Created debt record: {:?}", debt_record);
 
-                self.message_manager(
-                    target_chain,
-                    BankrollMessage::DebtNotif {
-                        debt_id,
-                        user_chain,
-                        amount,
-                        created_at: timestamp,
-                    },
-                );
+                self.message_manager(target_chain, BankrollMessage::DebtNotif { debt_id, amount, created_at });
                 BankrollResponse::Ok
             }
             BankrollOperation::TransferTokenPot { amount, target_chain } => {
                 log::info!("BankrollOperation::TransferTokenPot request from {:?}", self.runtime.authenticated_signer());
 
-                let user_chain = self.runtime.chain_id();
-                self.message_manager(target_chain, BankrollMessage::TokenPot { user_chain, amount });
+                self.message_manager(target_chain, BankrollMessage::TokenPot { amount });
                 BankrollResponse::Ok
             }
             // * Master Chain
@@ -133,16 +124,11 @@ impl Contract for BankrollContract {
                 let current_token = self.state.blackjack_token.get_mut();
                 current_token.saturating_add_assign(amount);
             }
-            BankrollMessage::DebtNotif {
-                debt_id,
-                user_chain,
-                amount,
-                created_at,
-            } => {
+            BankrollMessage::DebtNotif { debt_id, amount, created_at } => {
                 log::info!(
                     "BankrollMessage::DebtNotif debt_id: {} from user_chain: {:?} amount: {} at {:?}",
                     debt_id,
-                    user_chain,
+                    origin_chain_id,
                     amount,
                     self.runtime.chain_id()
                 );
@@ -163,17 +149,17 @@ impl Contract for BankrollContract {
                 log::info!(
                     "Debt payment processed. Remaining tokens: {}. Sending DebtPaid to {:?}",
                     remaining_token,
-                    user_chain
+                    origin_chain_id
                 );
 
                 // Send DebtPaid message back to the user chain
                 let paid_at = self.runtime.system_time();
-                self.message_manager(user_chain, BankrollMessage::DebtPaid { debt_id, amount, paid_at });
+                self.message_manager(origin_chain_id, BankrollMessage::DebtPaid { debt_id, amount, paid_at });
 
                 // Log debt history
                 let debt_record = DebtRecord {
                     id: debt_id,
-                    user_chain,
+                    user_chain: origin_chain_id,
                     amount,
                     created_at,
                     paid_at: Some(paid_at),
@@ -183,10 +169,10 @@ impl Contract for BankrollContract {
                     panic!("Failed to create debt record for debt_id: {}", debt_id);
                 });
             }
-            BankrollMessage::TokenPot { user_chain, amount } => {
+            BankrollMessage::TokenPot { amount } => {
                 log::info!(
                     "BankrollMessage::TokenPot from {:?} amount: {} at {:?}",
-                    user_chain,
+                    origin_chain_id,
                     amount,
                     self.runtime.chain_id()
                 );
@@ -195,7 +181,21 @@ impl Contract for BankrollContract {
                 let current_token = self.state.blackjack_token.get_mut();
                 current_token.saturating_add_assign(amount);
 
-                log::info!("Token pot received. New total tokens: {}", current_token);
+                // Create token pot record for history
+                let created_at = self.runtime.system_time();
+                let pot_id = created_at.micros();
+                let pot_record = TokenPotRecord {
+                    id: pot_id,
+                    user_chain: origin_chain_id,
+                    amount,
+                    created_at,
+                };
+
+                self.state.token_pot_log.insert(&pot_id, pot_record.clone()).unwrap_or_else(|_| {
+                    panic!("Failed to create token pot record for pot_id: {}", pot_id);
+                });
+
+                log::info!("Token pot received. New total tokens: {}. Pot record created: {:?}", current_token, pot_record);
             }
             // * User Chain
             BankrollMessage::DebtPaid { debt_id, amount, paid_at } => {
@@ -207,10 +207,23 @@ impl Contract for BankrollContract {
                     self.runtime.chain_id()
                 );
 
-                // Remove the debt from the log
-                self.state.debt_log.remove(&debt_id).expect("Failed to remove debt record");
+                // Update the debt record with paid_at and status
+                let mut debt_record = self
+                    .state
+                    .debt_log
+                    .get(&debt_id)
+                    .await
+                    .expect("Failed to get debt record")
+                    .expect("Debt record not found");
 
-                log::info!("Debt {} successfully cleared", debt_id);
+                debt_record.paid_at = Some(paid_at);
+                debt_record.status = DebtStatus::Paid;
+
+                self.state.debt_log.insert(&debt_id, debt_record).unwrap_or_else(|_| {
+                    panic!("Failed to update debt record for debt_id: {}", debt_id);
+                });
+
+                log::info!("Debt {} successfully updated to Paid status", debt_id);
             }
         }
     }
