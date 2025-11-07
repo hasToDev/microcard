@@ -41,7 +41,7 @@ impl Player {
         self.bet = Amount::from_tokens(0)
     }
 
-    pub fn deal(&mut self, min_bet: Amount, current_profile_balance: Amount) -> (Amount, Amount) {
+    pub fn deal_bet(&mut self, min_bet: Amount, current_profile_balance: Amount) -> (Amount, Amount) {
         if self.balance.ne(&current_profile_balance) {
             panic!("Profile and Player balance didn't match!");
         }

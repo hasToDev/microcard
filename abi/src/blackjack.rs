@@ -70,6 +70,7 @@ pub struct BlackjackGame {
     pub dealer: Dealer,
     pub players: HashMap<u8, Player>,
     pub deck: Deck,
+    pub count: u64, // number of cards currently available in the deck
     pub pot: Amount,
     pub active_seat: u8, // single player: 0, multi player: 1-3
     pub status: BlackjackStatus,
@@ -78,11 +79,13 @@ pub struct BlackjackGame {
 
 impl BlackjackGame {
     pub fn new(new_deck: Deck) -> Self {
+        let count = new_deck.cards.len() as u64;
         BlackjackGame {
             sequence: 0,
             dealer: Dealer { hand: vec![] },
             players: HashMap::new(),
             deck: new_deck,
+            count,
             pot: Amount::from_tokens(0),
             active_seat: 0,
             status: BlackjackStatus::WaitingForPlayer,
@@ -111,8 +114,9 @@ impl BlackjackGame {
     pub fn draw_initial_cards(&mut self, seat_id: u8) {
         // Deal 2 cards to the dealer
         for _ in 0..2 {
-            if let Some(card) = self.deck.deal() {
+            if let Some(card) = self.deck.deal_card() {
                 self.dealer.hand.push(card);
+                self.count = self.count.saturating_sub(1);
             } else {
                 panic!("Deck ran out of cards while dealing to dealer");
             }
@@ -121,8 +125,9 @@ impl BlackjackGame {
         // Get the player and deal 2 cards to them
         if let Some(player) = self.players.get_mut(&seat_id) {
             for _ in 0..2 {
-                if let Some(card) = self.deck.deal() {
+                if let Some(card) = self.deck.deal_card() {
                     player.hand.push(card);
+                    self.count = self.count.saturating_sub(1);
                 } else {
                     panic!("Deck ran out of cards while dealing to player");
                 }
@@ -153,6 +158,7 @@ impl BlackjackGame {
             dealer: self.dealer.clone(),
             players: self.players.clone(),
             deck: Deck::empty(),
+            count: self.count,
             pot: self.pot,
             active_seat: self.active_seat,
             status: self.status.clone(),

@@ -42,7 +42,7 @@ impl Deck {
             .shuffle(&mut get_custom_rng(hash, timestamp).expect("Failed to get custom rng").clone());
     }
 
-    pub fn deal(&mut self) -> Option<u8> {
+    pub fn deal_card(&mut self) -> Option<u8> {
         self.cards.pop()
     }
 

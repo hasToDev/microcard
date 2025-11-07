@@ -601,7 +601,7 @@ impl BlackjackContract {
             player.current_player = true;
         }
 
-        let (bet_amount, latest_balance) = player.deal(bet_data.clone().unwrap().min_bet, profile.balance);
+        let (bet_amount, latest_balance) = player.deal_bet(bet_data.clone().unwrap().min_bet, profile.balance);
         log::info!("Player dealt - bet_amount: {}, latest_balance: {}", bet_amount, latest_balance);
         profile.update_balance(latest_balance);
 
@@ -732,7 +732,8 @@ impl BlackjackContract {
         let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
 
         // Deal one card from deck and insert it into Player's object hand
-        let card = single_player_game.deck.deal().expect("Deck ran out of cards");
+        let card = single_player_game.deck.deal_card().expect("Deck ran out of cards");
+        single_player_game.count = single_player_game.count.saturating_sub(1);
         player.hand.push(card);
 
         // Update player in player_seat_map
@@ -949,8 +950,9 @@ impl BlackjackContract {
 
         // Keep dealing cards to dealer if hand value is lower than 17
         while dealer_hand_value < 17 {
-            let card = single_player_game.deck.deal().expect("Deck ran out of cards");
+            let card = single_player_game.deck.deal_card().expect("Deck ran out of cards");
             single_player_game.dealer.hand.push(card);
+            single_player_game.count = single_player_game.count.saturating_sub(1);
             dealer_hand_value = calculate_hand_value(&single_player_game.dealer.hand);
             log::info!("Dealer drew card {}, hand value is now {}", card, dealer_hand_value);
         }
