@@ -252,6 +252,28 @@ impl Contract for BlackjackContract {
                     }
                 }
             }
+            BlackjackOperation::ExitSinglePlayerGame {} => {
+                log::info!("BlackjackOperation::ExitSinglePlayerGame");
+
+                let current_user_status = self.state.user_status.get();
+                log::info!("Current user status: {:?}", current_user_status);
+                if current_user_status.ne(&UserStatus::InSinglePlayerGame) {
+                    panic!("Player not in any SinglePlayerGame!");
+                }
+
+                let game_status = &self.state.single_player_game.get().status;
+                log::info!("Current game status: {:?}", game_status);
+                if game_status.ne(&BlackjackStatus::WaitingForBets) || game_status.ne(&BlackjackStatus::RoundEnded) {
+                    panic!("game in play, unable to exit, please finish the current game");
+                }
+
+                self.update_profile_balance_and_bet_data();
+                self.state.user_status.set(UserStatus::Idle);
+                self.state.single_player_game.clear();
+                self.state.player_seat_map.clear();
+
+                log::info!("Successfully exited single player game");
+            }
             // * Master Chain
             BlackjackOperation::AddPlayChain {
                 target_public_chain,

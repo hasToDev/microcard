@@ -34,6 +34,7 @@ pub enum BlackjackOperation {
     Hit {},
     Stand {},
     StartSinglePlayerGame {},
+    ExitSinglePlayerGame {},
     // * Master Chain
     AddPlayChain { target_public_chain: ChainId, play_chain_id: ChainId },
     MintToken { chain_id: ChainId, amount: Amount },
