@@ -22,7 +22,7 @@ pub enum BlackjackStatus {
     WaitingForBets = 1,
     PlayerTurn = 2,
     DealerTurn = 3,
-    Ended = 4,
+    RoundEnded = 4,
 }
 
 scalar!(MutationReason);

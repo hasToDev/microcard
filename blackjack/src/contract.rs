@@ -113,9 +113,16 @@ impl Contract for BlackjackContract {
                         self.player_bet(amount).await;
                     }
                     UserStatus::InSinglePlayerGame => {
-                        if self.state.single_player_game.get().status.ne(&BlackjackStatus::WaitingForBets) {
+                        let game_status = &self.state.single_player_game.get().status;
+                        if game_status.ne(&BlackjackStatus::WaitingForBets) || game_status.ne(&BlackjackStatus::RoundEnded) {
                             panic!("game in play, not ready for placing bets, please wait for the next hands");
                         }
+
+                        if game_status.eq(&BlackjackStatus::RoundEnded) {
+                            self.update_profile_balance_and_bet_data();
+                            self.prepare_next_single_player_bet_round().await;
+                        }
+
                         log::info!("Bet SinglePlayerGame, amount: {}", amount);
                         self.player_bet(amount).await;
                     }
@@ -527,10 +534,19 @@ impl BlackjackContract {
             bet_data.max_bet,
             user_profile.balance
         );
-        let player_async = self.state.player_seat_map.get_mut(&seat_id).await;
-        let player = player_async.expect("Player not found!").expect("Player not found!");
 
+        // Retrieve player and add bet
+        let blackjack_game = self.state.single_player_game.get_mut();
+        blackjack_game.sequence = blackjack_game.sequence.saturating_add(1);
+
+        let player = blackjack_game.players.get_mut(&seat_id).expect("Player not found in single player game");
         player.add_bet(amount, user_profile.balance);
+
+        // Update player in player_seat_map
+        self.state.player_seat_map.insert(&seat_id, player.clone()).unwrap_or_else(|_| {
+            panic!("Failed to update Player Seat Map on player_bet");
+        });
+
         log::info!("Bet placed successfully for seat_id: {}, amount: {}", seat_id, amount);
     }
     async fn deal_draw_single_player(&mut self) {
@@ -690,7 +706,7 @@ impl BlackjackContract {
 
         // Get player and calculate winnings (2:1 payout)
         let single_player_game = self.state.single_player_game.get_mut();
-        single_player_game.update_status(BlackjackStatus::Ended);
+        single_player_game.update_status(BlackjackStatus::RoundEnded);
         single_player_game.sequence = single_player_game.sequence.saturating_add(1);
         let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
 
@@ -776,7 +792,7 @@ impl BlackjackContract {
 
         // Update game status
         let game = self.state.single_player_game.get_mut();
-        game.update_status(BlackjackStatus::Ended);
+        game.update_status(BlackjackStatus::RoundEnded);
         game.sequence = game.sequence.saturating_add(1);
 
         log::info!("Player bust processed successfully");
@@ -791,7 +807,7 @@ impl BlackjackContract {
 
         // Get player's bet amount
         let single_player_game = self.state.single_player_game.get_mut();
-        single_player_game.update_status(BlackjackStatus::Ended);
+        single_player_game.update_status(BlackjackStatus::RoundEnded);
         single_player_game.sequence = single_player_game.sequence.saturating_add(1);
         let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
 
@@ -906,5 +922,35 @@ impl BlackjackContract {
         log::info!("Stand operation completed. Outcome: {:?}", outcome);
 
         outcome
+    }
+
+    async fn prepare_next_single_player_bet_round(&mut self) {
+        log::info!("Preparing for next single player bet round");
+
+        let profile = self.state.profile.get();
+        let seat_id = profile.seat.expect("Player seat not found");
+
+        let single_player_game = self.state.single_player_game.get_mut();
+        single_player_game.dealer.hand = vec![];
+        single_player_game.pot = Amount::ZERO;
+        single_player_game.update_status(BlackjackStatus::WaitingForBets);
+        log::info!("Dealer hand and pot reset, Game status updated to WaitingForBets");
+
+        let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
+
+        // Update player balance from profile
+        player.balance = profile.balance;
+        log::info!("Player balance updated to: {}", player.balance);
+
+        player.reset_bet();
+        player.hand = vec![];
+        log::info!("Player hand and bet resets");
+
+        // Update player in player_seat_map
+        self.state.player_seat_map.insert(&seat_id, player.clone()).unwrap_or_else(|_| {
+            panic!("Failed to update Player Seat Map on prepare_for_next_single_player_bet_round");
+        });
+
+        log::info!("Preparation for next round complete");
     }
 }
