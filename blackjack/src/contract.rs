@@ -134,7 +134,7 @@ impl Contract for BlackjackContract {
                     }
                 }
             }
-            BlackjackOperation::Deal {} => {
+            BlackjackOperation::DealBet {} => {
                 log::info!("BlackjackOperation::Deal");
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
