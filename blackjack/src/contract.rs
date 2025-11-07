@@ -16,6 +16,9 @@ use linera_sdk::{
     Contract, ContractRuntime,
 };
 
+const ONE_MINUTE_DURATION_IN_MICROS: u64 = 60 * 1_000_000;
+const TWO_MINUTES_DURATION_IN_MICROS: u64 = 120 * 1_000_000;
+
 pub struct BlackjackContract {
     state: BlackjackState,
     runtime: ContractRuntime<Self>,
@@ -157,8 +160,10 @@ impl Contract for BlackjackContract {
                                 log::info!("Game continues to player turn");
 
                                 // Update single_player_game state sequence
+                                let current_time = self.runtime.system_time().micros();
                                 let single_player_game = self.state.single_player_game.get_mut();
                                 single_player_game.sequence = single_player_game.sequence.saturating_add(1);
+                                single_player_game.set_time_limit(current_time, ONE_MINUTE_DURATION_IN_MICROS);
                             }
                         }
                     }
@@ -190,8 +195,10 @@ impl Contract for BlackjackContract {
                             }
                             GameOutcome::None => {
                                 // Update single_player_game state sequence
+                                let current_time = self.runtime.system_time().micros();
                                 let single_player_game = self.state.single_player_game.get_mut();
                                 single_player_game.sequence = single_player_game.sequence.saturating_add(1);
+                                single_player_game.set_time_limit(current_time, ONE_MINUTE_DURATION_IN_MICROS);
                             }
                             _ => {
                                 panic!("BlackjackOperation::Hit have unexpected outcome!");
@@ -255,6 +262,8 @@ impl Contract for BlackjackContract {
             }
             BlackjackOperation::ExitSinglePlayerGame {} => {
                 log::info!("BlackjackOperation::ExitSinglePlayerGame");
+
+                // self.runtime.system_time().micros()
 
                 let current_user_status = self.state.user_status.get();
                 log::info!("Current user status: {:?}", current_user_status);
@@ -510,12 +519,14 @@ impl BlackjackContract {
         self.state.user_status.set(UserStatus::InSinglePlayerGame);
         self.state.profile.get_mut().update_seat(seat_id);
 
-        let mut blackjack_game = self.create_single_player_blackjack_game();
-        blackjack_game.update_status(BlackjackStatus::WaitingForBets);
-        blackjack_game.register_update_player(seat_id, new_player);
-        blackjack_game.sequence = blackjack_game.sequence.saturating_add(1);
-        self.state.single_player_game.set(blackjack_game.clone());
-        log::info!("Single player game created successfully - status: {:?}", blackjack_game.status);
+        let current_time = self.runtime.system_time().micros();
+        let mut single_player_game = self.create_single_player_blackjack_game();
+        single_player_game.update_status(BlackjackStatus::WaitingForBets);
+        single_player_game.register_update_player(seat_id, new_player);
+        single_player_game.sequence = single_player_game.sequence.saturating_add(1);
+        single_player_game.set_time_limit(current_time, ONE_MINUTE_DURATION_IN_MICROS);
+        self.state.single_player_game.set(single_player_game.clone());
+        log::info!("Single player game created successfully - status: {:?}", single_player_game.status);
     }
     fn add_user_to_new_multi_player_game(&mut self, seat_id: u8) {
         let balance = self.state.profile.get().balance;
@@ -569,10 +580,10 @@ impl BlackjackContract {
         );
 
         // Retrieve player and add bet
-        let blackjack_game = self.state.single_player_game.get_mut();
-        blackjack_game.sequence = blackjack_game.sequence.saturating_add(1);
+        let single_player_game = self.state.single_player_game.get_mut();
+        single_player_game.sequence = single_player_game.sequence.saturating_add(1);
 
-        let player = blackjack_game.players.get_mut(&seat_id).expect("Player not found in single player game");
+        let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
         player.add_bet(amount, user_profile.balance);
 
         // Update player in player_seat_map
@@ -611,18 +622,21 @@ impl BlackjackContract {
         blackjack_token_pool.saturating_add_assign(bet_amount);
         log::info!("Token pool updated: {} -> {}", previous_pool, blackjack_token_pool);
 
-        let blackjack_game = self.state.single_player_game.get_mut();
-        blackjack_game.draw_initial_cards(seat_id.unwrap());
+        let single_player_game = self.state.single_player_game.get_mut();
+        single_player_game.draw_initial_cards(seat_id.unwrap());
         log::info!("Initial cards drawn for seat_id: {}", seat_id.unwrap());
-        blackjack_game.update_status(BlackjackStatus::PlayerTurn);
-        blackjack_game.pot.saturating_add_assign(bet_amount);
-        blackjack_game.register_update_player(seat_id.unwrap(), player.clone());
+        single_player_game.update_status(BlackjackStatus::PlayerTurn);
+        single_player_game.pot.saturating_add_assign(bet_amount);
+        single_player_game.register_update_player(seat_id.unwrap(), player.clone());
 
-        log::info!("Deal complete - game pot: {}, player balance: {}", blackjack_game.pot, latest_balance);
+        log::info!("Deal complete - game pot: {}, player balance: {}", single_player_game.pot, latest_balance);
 
         // Calculate hand values for both dealer and player
-        let dealer_hand_value = calculate_hand_value(&blackjack_game.dealer.hand);
-        let player = blackjack_game.players.get(&seat_id.unwrap()).expect("Player not found in single player game");
+        let dealer_hand_value = calculate_hand_value(&single_player_game.dealer.hand);
+        let player = single_player_game
+            .players
+            .get(&seat_id.unwrap())
+            .expect("Player not found in single player game");
         let player_hand_value = calculate_hand_value(&player.hand);
 
         log::info!(
@@ -771,9 +785,11 @@ impl BlackjackContract {
         let seat_id = profile.seat.expect("Player seat not found");
 
         // Get player and calculate winnings (2:1 payout)
+        let current_time = self.runtime.system_time().micros();
         let single_player_game = self.state.single_player_game.get_mut();
         single_player_game.update_status(BlackjackStatus::RoundEnded);
         single_player_game.sequence = single_player_game.sequence.saturating_add(1);
+        single_player_game.set_time_limit(current_time, TWO_MINUTES_DURATION_IN_MICROS);
         let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
 
         // Player gets back bet + equal winnings
@@ -857,9 +873,11 @@ impl BlackjackContract {
         }
 
         // Update game status
+        let current_time = self.runtime.system_time().micros();
         let game = self.state.single_player_game.get_mut();
         game.update_status(BlackjackStatus::RoundEnded);
         game.sequence = game.sequence.saturating_add(1);
+        game.set_time_limit(current_time, TWO_MINUTES_DURATION_IN_MICROS);
 
         log::info!("Player bust processed successfully");
     }
@@ -872,9 +890,11 @@ impl BlackjackContract {
         let seat_id = profile.seat.expect("Player seat not found");
 
         // Get player's bet amount
+        let current_time = self.runtime.system_time().micros();
         let single_player_game = self.state.single_player_game.get_mut();
         single_player_game.update_status(BlackjackStatus::RoundEnded);
         single_player_game.sequence = single_player_game.sequence.saturating_add(1);
+        single_player_game.set_time_limit(current_time, TWO_MINUTES_DURATION_IN_MICROS);
         let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
 
         // Player gets back their bet (no winnings, no loss)

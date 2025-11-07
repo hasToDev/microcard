@@ -62,6 +62,7 @@ pub enum GameOutcome {
 pub struct GameData {
     pub profile: Profile,
     pub game: BlackjackGame,
+    pub user_status: UserStatus,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
@@ -74,7 +75,7 @@ pub struct BlackjackGame {
     pub pot: Amount,
     pub active_seat: u8, // single player: 0, multi player: 1-3
     pub status: BlackjackStatus,
-    pub time_limit: Timestamp,
+    pub time_limit: Option<Timestamp>,
 }
 
 impl BlackjackGame {
@@ -89,7 +90,7 @@ impl BlackjackGame {
             pot: Amount::from_tokens(0),
             active_seat: 0,
             status: BlackjackStatus::WaitingForPlayer,
-            time_limit: Timestamp::from(0),
+            time_limit: None,
         }
     }
 
@@ -103,6 +104,11 @@ impl BlackjackGame {
 
     pub fn update_status(&mut self, new_status: BlackjackStatus) {
         self.status = new_status;
+    }
+
+    pub fn set_time_limit(&mut self, current_time_micros: u64, duration_micros: u64) {
+        let future_time_micros = current_time_micros.saturating_add(duration_micros);
+        self.time_limit = Some(Timestamp::from(future_time_micros));
     }
 
     pub fn remove_player(&mut self, seat_id: u8) {
