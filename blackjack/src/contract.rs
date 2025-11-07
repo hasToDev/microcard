@@ -135,16 +135,16 @@ impl Contract for BlackjackContract {
                 }
             }
             BlackjackOperation::DealBet {} => {
-                log::info!("BlackjackOperation::Deal");
+                log::info!("BlackjackOperation::DealBet");
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
-                        panic!("multi player deal not implemented yet");
+                        panic!("multi player deal bet not implemented yet");
                     }
                     UserStatus::InSinglePlayerGame => {
                         if self.state.single_player_game.get().status.ne(&BlackjackStatus::WaitingForBets) {
                             panic!("game in play, not ready for dealing bets, please wait for the next hands");
                         }
-                        log::info!("Deal SinglePlayerGame");
+                        log::info!("DealBet SinglePlayerGame");
                         let outcome = self.deal_draw_single_player().await;
 
                         // Handle outcome based on initial deal
