@@ -152,12 +152,13 @@ impl Contract for BlackjackContract {
                             GameOutcome::DealerWins => {
                                 self.handle_player_bust().await;
                             }
-                            GameOutcome::Draw => {
-                                self.handle_player_draw().await;
-                            }
-                            GameOutcome::None => {
+                            _ => {
                                 // No Blackjack on initial deal, game continues normally
                                 log::info!("Game continues to player turn");
+
+                                // Update single_player_game state sequence
+                                let single_player_game = self.state.single_player_game.get_mut();
+                                single_player_game.sequence = single_player_game.sequence.saturating_add(1);
                             }
                         }
                     }
@@ -616,7 +617,6 @@ impl BlackjackContract {
         blackjack_game.update_status(BlackjackStatus::PlayerTurn);
         blackjack_game.pot.saturating_add_assign(bet_amount);
         blackjack_game.register_update_player(seat_id.unwrap(), player.clone());
-        blackjack_game.sequence = blackjack_game.sequence.saturating_add(1);
 
         log::info!("Deal complete - game pot: {}, player balance: {}", blackjack_game.pot, latest_balance);
 
