@@ -136,20 +136,30 @@ impl Contract for BlackjackContract {
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
                         panic!("multi player deal not implemented yet");
-                        // TODO: implement deal for multi player
-                        // TODO: after the last player call DEAL, continue with changing BlackjackStatus,drawing card for both dealer and players
-                        // if self.state.channel_game_state.get().status.ne(&BlackjackStatus::WaitingForBets) {
-                        //     panic!("game in play, not ready for dealing bets, please wait for the next hands");
-                        // }
-                        // log::info!("Deal MultiPlayerGame");
                     }
                     UserStatus::InSinglePlayerGame => {
                         if self.state.single_player_game.get().status.ne(&BlackjackStatus::WaitingForBets) {
                             panic!("game in play, not ready for dealing bets, please wait for the next hands");
                         }
                         log::info!("Deal SinglePlayerGame");
-                        self.deal_draw_single_player().await;
-                        // TODO: check both dealer and players deck for Blackjack (21) in any of them
+                        let outcome = self.deal_draw_single_player().await;
+
+                        // Handle outcome based on initial deal
+                        match outcome {
+                            GameOutcome::PlayerWins => {
+                                self.handle_player_win().await;
+                            }
+                            GameOutcome::DealerWins => {
+                                self.handle_player_bust().await;
+                            }
+                            GameOutcome::Draw => {
+                                self.handle_player_draw().await;
+                            }
+                            GameOutcome::None => {
+                                // No Blackjack on initial deal, game continues normally
+                                log::info!("Game continues to player turn");
+                            }
+                        }
                     }
                     _ => {
                         panic!("Player not in any Single or MultiPlayerGame!");
@@ -549,7 +559,7 @@ impl BlackjackContract {
 
         log::info!("Bet placed successfully for seat_id: {}, amount: {}", seat_id, amount);
     }
-    async fn deal_draw_single_player(&mut self) {
+    async fn deal_draw_single_player(&mut self) -> GameOutcome {
         log::info!("deal_draw_single_player called");
         let profile = self.state.profile.get_mut();
         let seat_id = profile.seat;
@@ -588,7 +598,40 @@ impl BlackjackContract {
 
         log::info!("Deal complete - game pot: {}, player balance: {}", blackjack_game.pot, latest_balance);
 
+        // Calculate hand values for both dealer and player
+        let dealer_hand_value = calculate_hand_value(&blackjack_game.dealer.hand);
+        let player = blackjack_game.players.get(&seat_id.unwrap()).expect("Player not found in single player game");
+        let player_hand_value = calculate_hand_value(&player.hand);
+
+        log::info!(
+            "Initial deal - Dealer hand value: {}, Player hand value: {}",
+            dealer_hand_value,
+            player_hand_value
+        );
+
+        // Check for Blackjack (21) in initial deal
+        let outcome = match (dealer_hand_value == 21, player_hand_value == 21) {
+            (true, true) => {
+                log::info!("Both dealer and player have Blackjack! It's a draw");
+                GameOutcome::Draw
+            }
+            (true, false) => {
+                log::info!("Dealer has Blackjack! Dealer wins");
+                GameOutcome::DealerWins
+            }
+            (false, true) => {
+                log::info!("Player has Blackjack! Player wins");
+                GameOutcome::PlayerWins
+            }
+            (false, false) => {
+                log::info!("No Blackjack on initial deal, game continues");
+                GameOutcome::None
+            }
+        };
+
         self.bankroll_update_balance(latest_balance);
+
+        outcome
     }
     // * Play Chain
     fn event_manager(&mut self, event: BlackjackEvent) {
