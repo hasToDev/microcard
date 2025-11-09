@@ -1,5 +1,5 @@
 use crate::bet_chip_profile::Profile;
-use crate::deck::Deck;
+use crate::deck::{format_card, Deck};
 use crate::player_dealer::{Dealer, Player};
 use async_graphql::scalar;
 use async_graphql_derive::SimpleObject;
@@ -121,7 +121,7 @@ impl BlackjackGame {
         // Deal 2 cards to the dealer
         for _ in 0..2 {
             if let Some(card) = self.deck.deal_card() {
-                // TODO: log and translate int card into readable card, i.e. Spade 8, Queen Ace, etc
+                log::info!("Dealer drew: {}", format_card(card));
                 self.dealer.hand.push(card);
                 self.count = self.count.saturating_sub(1);
             } else {
@@ -133,7 +133,7 @@ impl BlackjackGame {
         if let Some(player) = self.players.get_mut(&seat_id) {
             for _ in 0..2 {
                 if let Some(card) = self.deck.deal_card() {
-                    // TODO: log and translate int card into readable card, i.e. Spade 8, Queen Ace, etc
+                    log::info!("Player at seat {} drew: {}", seat_id, format_card(card));
                     player.hand.push(card);
                     self.count = self.count.saturating_sub(1);
                 } else {

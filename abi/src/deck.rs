@@ -104,3 +104,48 @@ pub fn calculate_hand_value(hand: &Vec<u8>) -> u8 {
 
     total
 }
+
+/// Format a card value (1-52) into a human-readable string.
+///
+/// # Examples:
+/// - Card 1: "Ace of Spades"
+/// - Card 11: "Jack of Spades"
+/// - Card 37: "Jack of Diamonds"
+/// - Card 52: "King of Clubs"
+///
+/// # Card Ranges:
+/// - Spades: 1-13
+/// - Hearts: 14-26
+/// - Diamonds: 27-39
+/// - Clubs: 40-52
+pub fn format_card(card: u8) -> String {
+    let rank = ((card - 1) % 13) + 1; // Get rank 1-13 within each suit
+    let suit_index = (card - 1) / 13; // Get suit index 0-3
+
+    let rank_name = match rank {
+        1 => "Ace",
+        11 => "Jack",
+        12 => "Queen",
+        13 => "King",
+        n => {
+            let suit_name = match suit_index {
+                0 => "Spades",
+                1 => "Hearts",
+                2 => "Diamonds",
+                3 => "Clubs",
+                _ => "Unknown",
+            };
+            return format!("{} of {}", n, suit_name);
+        }
+    };
+
+    let suit_name = match suit_index {
+        0 => "Spades",
+        1 => "Hearts",
+        2 => "Diamonds",
+        3 => "Clubs",
+        _ => "Unknown",
+    };
+
+    format!("{} of {}", rank_name, suit_name)
+}

@@ -4,7 +4,7 @@ mod state;
 
 use self::state::BlackjackState;
 use abi::blackjack::{BlackjackGame, BlackjackStatus, GameOutcome, MutationReason, UserStatus, BLACKJACK_STREAM_NAME, MAX_BLACKJACK_PLAYERS};
-use abi::deck::{calculate_hand_value, get_new_deck, Deck};
+use abi::deck::{calculate_hand_value, format_card, get_new_deck, Deck};
 use abi::player_dealer::Player;
 use abi::random::get_random_value;
 use bankroll::{BankrollOperation, BankrollResponse};
@@ -758,8 +758,7 @@ impl BlackjackContract {
         // Calculate the value in Player's object hand
         let hand_value = calculate_hand_value(&player.hand);
 
-        // TODO: translate int card into readable card, i.e. Spade 8, Queen Ace, etc
-        log::info!("Player hit: drew card {}, hand value is now {}", card, hand_value);
+        log::info!("Player hit: drew {}, hand value is now {}", format_card(card), hand_value);
 
         let outcome = if hand_value > 21 {
             // Player busts
@@ -975,7 +974,7 @@ impl BlackjackContract {
             single_player_game.dealer.hand.push(card);
             single_player_game.count = single_player_game.count.saturating_sub(1);
             dealer_hand_value = calculate_hand_value(&single_player_game.dealer.hand);
-            log::info!("Dealer drew card {}, hand value is now {}", card, dealer_hand_value);
+            log::info!("Dealer drew {}, hand value is now {}", format_card(card), dealer_hand_value);
         }
 
         log::info!("Dealer finished drawing. Final hand value: {}", dealer_hand_value);
