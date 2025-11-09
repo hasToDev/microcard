@@ -52,17 +52,17 @@ impl Contract for BlackjackContract {
         match operation {
             // * User Chain
             BlackjackOperation::SubscribeTo { chain_id } => {
-                log::info!("BlackjackOperation::SubscribeTo chain_id: {:?}", chain_id);
+                log::info!("\n\nBlackjackOperation::SubscribeTo chain_id: {:?}", chain_id);
                 self.message_manager(chain_id, BlackjackMessage::Subscribe);
                 log::info!("Sent Subscribe message to chain_id: {:?}", chain_id);
             }
             BlackjackOperation::UnsubscribeFrom { chain_id } => {
-                log::info!("BlackjackOperation::UnsubscribeFrom chain_id: {:?}", chain_id);
+                log::info!("\n\nBlackjackOperation::UnsubscribeFrom chain_id: {:?}", chain_id);
                 self.message_manager(chain_id, BlackjackMessage::Unsubscribe);
                 log::info!("Sent Unsubscribe message to chain_id: {:?}", chain_id);
             }
             BlackjackOperation::FindPlayChain {} => {
-                log::info!("BlackjackOperation::FindPlayChain");
+                log::info!("\n\nBlackjackOperation::FindPlayChain");
 
                 if self.state.user_status.get().eq(&UserStatus::FindPlayChain) {
                     panic!("still waiting response from previous FindPlayChain");
@@ -76,7 +76,7 @@ impl Contract for BlackjackContract {
                 log::info!("Sent FindPlayChain message to public chain: {:?}", chain_id);
             }
             BlackjackOperation::RequestTableSeat { seat_id } => {
-                log::info!("BlackjackOperation::RequestTableSeat for seat_id: {}", seat_id);
+                log::info!("\n\nBlackjackOperation::RequestTableSeat for seat_id: {}", seat_id);
                 if self.state.user_play_chain.get().is_none() {
                     panic!("no Play Chain found");
                 }
@@ -101,12 +101,12 @@ impl Contract for BlackjackContract {
                 log::info!("Sent RequestTableSeat message to play_chain: {:?}", play_chain_id);
             }
             BlackjackOperation::GetBalance {} => {
-                log::info!("BlackjackOperation::GetBalance");
+                log::info!("\n\nBlackjackOperation::GetBalance");
                 let balance = self.bankroll_get_balance();
                 log::info!("Current Balance is {:?}", balance);
             }
             BlackjackOperation::Bet { amount } => {
-                log::info!("BlackjackOperation::Bet amount: {}", amount);
+                log::info!("\n\nBlackjackOperation::Bet amount: {}", amount);
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
                         if self.state.channel_game_state.get().status.ne(&BlackjackStatus::WaitingForBets) {
@@ -117,7 +117,10 @@ impl Contract for BlackjackContract {
                     }
                     UserStatus::InSinglePlayerGame => {
                         let game_status = &self.state.single_player_game.get().status;
-                        if game_status.ne(&BlackjackStatus::WaitingForBets) || game_status.ne(&BlackjackStatus::RoundEnded) {
+                        if game_status.eq(&BlackjackStatus::WaitingForPlayer)
+                            || game_status.eq(&BlackjackStatus::PlayerTurn)
+                            || game_status.eq(&BlackjackStatus::DealerTurn)
+                        {
                             panic!("game in play, not ready for placing bets, please wait for the next hands");
                         }
 
@@ -135,7 +138,7 @@ impl Contract for BlackjackContract {
                 }
             }
             BlackjackOperation::DealBet {} => {
-                log::info!("BlackjackOperation::DealBet");
+                log::info!("\n\nBlackjackOperation::DealBet");
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
                         panic!("multi player deal bet not implemented yet");
@@ -173,7 +176,7 @@ impl Contract for BlackjackContract {
                 }
             }
             BlackjackOperation::Hit {} => {
-                log::info!("BlackjackOperation::Hit");
+                log::info!("\n\nBlackjackOperation::Hit");
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
                         panic!("multi player hit not implemented yet");
@@ -211,7 +214,7 @@ impl Contract for BlackjackContract {
                 }
             }
             BlackjackOperation::Stand {} => {
-                log::info!("BlackjackOperation::Stand");
+                log::info!("\n\nBlackjackOperation::Stand");
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
                         panic!("multi player stand not implemented yet");
@@ -245,7 +248,7 @@ impl Contract for BlackjackContract {
                 }
             }
             BlackjackOperation::StartSinglePlayerGame {} => {
-                log::info!("BlackjackOperation::StartSinglePlayerGame");
+                log::info!("\n\nBlackjackOperation::StartSinglePlayerGame");
                 match self.state.user_status.get() {
                     UserStatus::Idle | UserStatus::PlayChainUnavailable => {
                         self.update_profile_balance_and_bet_data();
@@ -261,10 +264,7 @@ impl Contract for BlackjackContract {
                 }
             }
             BlackjackOperation::ExitSinglePlayerGame {} => {
-                log::info!("BlackjackOperation::ExitSinglePlayerGame");
-
-                // self.runtime.system_time().micros()
-
+                log::info!("\n\nBlackjackOperation::ExitSinglePlayerGame");
                 let current_user_status = self.state.user_status.get();
                 log::info!("Current user status: {:?}", current_user_status);
                 if current_user_status.ne(&UserStatus::InSinglePlayerGame) {
@@ -273,7 +273,10 @@ impl Contract for BlackjackContract {
 
                 let game_status = &self.state.single_player_game.get().status;
                 log::info!("Current game status: {:?}", game_status);
-                if game_status.ne(&BlackjackStatus::WaitingForBets) || game_status.ne(&BlackjackStatus::RoundEnded) {
+                if game_status.eq(&BlackjackStatus::WaitingForPlayer)
+                    || game_status.eq(&BlackjackStatus::PlayerTurn)
+                    || game_status.eq(&BlackjackStatus::DealerTurn)
+                {
                     panic!("game in play, unable to exit, please finish the current game");
                 }
 
@@ -289,6 +292,7 @@ impl Contract for BlackjackContract {
                 target_public_chain,
                 play_chain_id,
             } => {
+                log::info!("\n\nBlackjackOperation::AddPlayChain");
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_parameters().master_chain,
@@ -304,6 +308,7 @@ impl Contract for BlackjackContract {
                 log::info!("Sent AddPlayChain message to target_public_chain: {:?}", target_public_chain);
             }
             BlackjackOperation::MintToken { chain_id, amount } => {
+                log::info!("\n\nBlackjackOperation::MintToken");
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_parameters().master_chain,
@@ -329,6 +334,7 @@ impl Contract for BlackjackContract {
         match message {
             // * User Chain
             BlackjackMessage::FindPlayChainResult { chain_id } => {
+                log::info!("\n\nBlackjackMessage::FindPlayChainResult");
                 log::info!("BlackjackMessage::FindPlayChainResult from {:?}, chain_id: {:?}", origin_chain_id, chain_id);
                 if self.process_find_play_chain_result(origin_chain_id, chain_id) {
                     log::info!("Play chain found successfully, updating profile balance and bet data");
@@ -336,6 +342,7 @@ impl Contract for BlackjackContract {
                 }
             }
             BlackjackMessage::RequestTableSeatResult { seat_id, success } => {
+                log::info!("\n\nBlackjackMessage::RequestTableSeatResult");
                 if success {
                     self.add_user_to_new_multi_player_game(seat_id);
                     log::info!("RequestTableSeatResult SUCCESS on {:?}!", origin_chain_id);
@@ -346,16 +353,14 @@ impl Contract for BlackjackContract {
             }
             // * Public Chain
             BlackjackMessage::FindPlayChain => {
-                log::info!(
-                    "\nFindPlayChain Request Accepted at {:?} from: {:?}\n",
-                    self.runtime.chain_id(),
-                    origin_chain_id
-                );
+                log::info!("\n\nBlackjackMessage::FindPlayChain");
+                log::info!("FindPlayChain Request Accepted at {:?} from: {:?}", self.runtime.chain_id(), origin_chain_id);
 
                 let result = self.search_available_play_chain().await;
                 self.message_manager(origin_chain_id, BlackjackMessage::FindPlayChainResult { chain_id: result });
             }
             BlackjackMessage::AddPlayChain { chain_id } => {
+                log::info!("\n\nBlackjackMessage::AddPlayChain");
                 assert_eq!(
                     origin_chain_id,
                     self.runtime.application_parameters().master_chain,
@@ -366,21 +371,24 @@ impl Contract for BlackjackContract {
             }
             // * Play Chain
             BlackjackMessage::Subscribe => {
+                log::info!("\n\nBlackjackMessage::Subscribe");
                 let app_id = self.runtime.application_id().forget_abi();
                 self.runtime.subscribe_to_events(origin_chain_id, app_id, BLACKJACK_STREAM_NAME.into());
-                log::info!("\nUser {:?} subscribe to Play Chain {:?}\n", origin_chain_id, self.runtime.chain_id());
+                log::info!("User {:?} subscribe to Play Chain {:?}", origin_chain_id, self.runtime.chain_id());
             }
             BlackjackMessage::Unsubscribe => {
+                log::info!("\n\nBlackjackMessage::Unsubscribe");
                 let app_id = self.runtime.application_id().forget_abi();
                 self.runtime.unsubscribe_from_events(origin_chain_id, app_id, BLACKJACK_STREAM_NAME.into());
-                log::info!("\nUser {:?} unsubscribe from Play Chain {:?}\n", origin_chain_id, self.runtime.chain_id());
+                log::info!("User {:?} unsubscribe from Play Chain {:?}", origin_chain_id, self.runtime.chain_id());
             }
             BlackjackMessage::RequestTableSeat { seat_id, balance } => {
+                log::info!("\n\nBlackjackMessage::RequestTableSeat");
                 if self.request_table_seat_manager(seat_id, balance, origin_chain_id).is_some() {
                     let game = self.state.game.get();
                     self.event_manager(BlackjackEvent::GameState { game: game.data_for_event() })
                 }
-                log::info!("\nUser {:?} RequestTableSeat to Play Chain {:?}\n", origin_chain_id, self.runtime.chain_id());
+                log::info!("User {:?} RequestTableSeat to Play Chain {:?}", origin_chain_id, self.runtime.chain_id());
             }
         }
     }
@@ -596,47 +604,34 @@ impl BlackjackContract {
     async fn deal_draw_single_player(&mut self) -> GameOutcome {
         log::info!("deal_draw_single_player called");
         let profile = self.state.profile.get_mut();
-        let seat_id = profile.seat;
-        if seat_id.is_none() {
-            panic!("missing Player Seat ID");
-        }
+        let seat_id = profile.seat.expect("missing Seat ID");
 
         let bet_data = &profile.bet_data;
         if bet_data.is_none() {
             panic!("missing Bet Data");
         }
 
-        let player_async = self.state.player_seat_map.get_mut(&seat_id.unwrap()).await;
-        let player = player_async.expect("Player not found!").expect("Player not found!");
+        let single_player_game = self.state.single_player_game.get_mut();
+        log::info!("Initial cards drawn for seat_id: {}", seat_id);
+        single_player_game.draw_initial_cards(seat_id);
+        single_player_game.update_status(BlackjackStatus::PlayerTurn);
 
-        if seat_id.unwrap().eq(&player.seat_id) {
-            player.current_player = true;
-        }
+        let player = single_player_game.players.get_mut(&seat_id).expect("Player not found");
+        player.current_player = true;
 
         let (bet_amount, latest_balance) = player.deal_bet(bet_data.clone().unwrap().min_bet, profile.balance);
         log::info!("Player dealt - bet_amount: {}, latest_balance: {}", bet_amount, latest_balance);
         profile.update_balance(latest_balance);
+        single_player_game.pot.saturating_add_assign(bet_amount);
+        log::info!("Deal complete - game pot: {}, player balance: {}", single_player_game.pot, latest_balance);
 
         let blackjack_token_pool = self.state.blackjack_token_pool.get_mut();
         let previous_pool = *blackjack_token_pool;
         blackjack_token_pool.saturating_add_assign(bet_amount);
         log::info!("Token pool updated: {} -> {}", previous_pool, blackjack_token_pool);
 
-        let single_player_game = self.state.single_player_game.get_mut();
-        single_player_game.draw_initial_cards(seat_id.unwrap());
-        log::info!("Initial cards drawn for seat_id: {}", seat_id.unwrap());
-        single_player_game.update_status(BlackjackStatus::PlayerTurn);
-        single_player_game.pot.saturating_add_assign(bet_amount);
-        single_player_game.register_update_player(seat_id.unwrap(), player.clone());
-
-        log::info!("Deal complete - game pot: {}, player balance: {}", single_player_game.pot, latest_balance);
-
         // Calculate hand values for both dealer and player
         let dealer_hand_value = calculate_hand_value(&single_player_game.dealer.hand);
-        let player = single_player_game
-            .players
-            .get(&seat_id.unwrap())
-            .expect("Player not found in single player game");
         let player_hand_value = calculate_hand_value(&player.hand);
 
         log::info!(
@@ -644,6 +639,11 @@ impl BlackjackContract {
             dealer_hand_value,
             player_hand_value
         );
+
+        // Update player in player_seat_map
+        self.state.player_seat_map.insert(&seat_id, player.clone()).unwrap_or_else(|_| {
+            panic!("Failed to update Player Seat Map on deal_draw_single_player");
+        });
 
         // Check for Blackjack (21) in initial deal
         let outcome = match (dealer_hand_value == 21, player_hand_value == 21) {
@@ -758,6 +758,7 @@ impl BlackjackContract {
         // Calculate the value in Player's object hand
         let hand_value = calculate_hand_value(&player.hand);
 
+        // TODO: translate int card into readable card, i.e. Spade 8, Queen Ace, etc
         log::info!("Player hit: drew card {}, hand value is now {}", card, hand_value);
 
         let outcome = if hand_value > 21 {

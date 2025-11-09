@@ -1,14 +1,14 @@
-use async_graphql_derive::{InputObject, SimpleObject};
+use async_graphql_derive::SimpleObject;
 use linera_sdk::linera_base_types::{Amount, ChainId};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject, InputObject)]
+#[derive(Debug, Clone, Default, Deserialize, Eq, Ord, PartialOrd, PartialEq, Serialize, SimpleObject)]
 pub struct Player {
-    pub seat_id: u8, // seat_id 0 is for a single player mode
+    pub seat_id: u8, // single player: 0, multi player: 1-3
     pub bet: Amount,
     pub balance: Amount,
     pub hand: Vec<u8>,
-    pub chain_id: ChainId,
+    pub chain_id: Option<ChainId>,
     pub current_player: bool,
 }
 
@@ -19,7 +19,7 @@ impl Player {
             bet: Amount::from_tokens(0),
             balance,
             hand: vec![],
-            chain_id,
+            chain_id: Some(chain_id),
             current_player: false,
         }
     }

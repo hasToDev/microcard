@@ -121,6 +121,7 @@ impl BlackjackGame {
         // Deal 2 cards to the dealer
         for _ in 0..2 {
             if let Some(card) = self.deck.deal_card() {
+                // TODO: log and translate int card into readable card, i.e. Spade 8, Queen Ace, etc
                 self.dealer.hand.push(card);
                 self.count = self.count.saturating_sub(1);
             } else {
@@ -132,6 +133,7 @@ impl BlackjackGame {
         if let Some(player) = self.players.get_mut(&seat_id) {
             for _ in 0..2 {
                 if let Some(card) = self.deck.deal_card() {
+                    // TODO: log and translate int card into readable card, i.e. Spade 8, Queen Ace, etc
                     player.hand.push(card);
                     self.count = self.count.saturating_sub(1);
                 } else {
