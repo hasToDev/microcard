@@ -42,6 +42,7 @@ impl Contract for BankrollContract {
         match operation {
             // * User Chain
             BankrollOperation::Balance { owner } => {
+                log::info!("\n\nBankrollOperation::Balance");
                 log::info!("BankrollOperation::Balance request from  {:?}", owner);
 
                 let balance_async = self.state.accounts.get(&owner).await;
@@ -61,6 +62,7 @@ impl Contract for BankrollContract {
                 BankrollResponse::Balance(balance)
             }
             BankrollOperation::UpdateBalance { owner, amount } => {
+                log::info!("\n\nBankrollOperation::UpdateBalance");
                 log::info!("BankrollOperation::UpdateBalance request from {:?}, updating balance to: {}", owner, amount);
 
                 self.state.accounts.insert(&owner, amount).unwrap_or_else(|_| {
@@ -71,6 +73,7 @@ impl Contract for BankrollContract {
                 BankrollResponse::Ok
             }
             BankrollOperation::NotifyDebt { amount, target_chain } => {
+                log::info!("\n\nBankrollOperation::NotifyDebt");
                 log::info!(
                     "BankrollOperation::NotifyDebt request from {:?}, amount: {}, target_chain: {:?}",
                     self.runtime.authenticated_signer(),
@@ -103,6 +106,7 @@ impl Contract for BankrollContract {
                 BankrollResponse::Ok
             }
             BankrollOperation::TransferTokenPot { amount, target_chain } => {
+                log::info!("\n\nBankrollOperation::TransferTokenPot");
                 log::info!(
                     "BankrollOperation::TransferTokenPot request from {:?}, amount: {}, target_chain: {:?}",
                     self.runtime.authenticated_signer(),
@@ -116,6 +120,7 @@ impl Contract for BankrollContract {
             }
             // * Master Chain
             BankrollOperation::MintToken { chain_id, amount } => {
+                log::info!("\n\nBankrollOperation::MintToken");
                 assert_eq!(
                     self.runtime.chain_id(),
                     self.runtime.application_parameters().master_chain,
@@ -140,6 +145,7 @@ impl Contract for BankrollContract {
         match message {
             // * Public Chain
             BankrollMessage::ReceivedToken { amount } => {
+                log::info!("\n\nBankrollMessage::ReceivedToken");
                 log::info!(
                     "BankrollMessage::ReceivedToken from {:?} at {:?}, amount: {}",
                     origin_chain_id,
@@ -152,6 +158,7 @@ impl Contract for BankrollContract {
                 log::info!("Token balance updated: {} -> {}", previous_balance, current_token);
             }
             BankrollMessage::DebtNotif { debt_id, amount, created_at } => {
+                log::info!("\n\nBankrollMessage::DebtNotif");
                 log::info!(
                     "BankrollMessage::DebtNotif debt_id: {} from user_chain: {:?} amount: {} at {:?}",
                     debt_id,
@@ -200,6 +207,7 @@ impl Contract for BankrollContract {
                 });
             }
             BankrollMessage::TokenPot { amount } => {
+                log::info!("\n\nBankrollMessage::TokenPot");
                 log::info!(
                     "BankrollMessage::TokenPot from {:?} amount: {} at {:?}",
                     origin_chain_id,
@@ -229,6 +237,7 @@ impl Contract for BankrollContract {
             }
             // * User Chain
             BankrollMessage::DebtPaid { debt_id, amount, paid_at } => {
+                log::info!("\n\nBankrollMessage::DebtPaid");
                 log::info!(
                     "BankrollMessage::DebtPaid debt_id: {} amount: {} timestamp: {:?} at {:?}",
                     debt_id,
