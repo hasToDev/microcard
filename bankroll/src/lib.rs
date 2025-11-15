@@ -34,11 +34,13 @@ pub enum BankrollOperation {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BankrollMessage {
     // * Public Chain
-    ReceivedToken { amount: Amount },
-    DebtPaid { debt_id: u64, amount: Amount, paid_at: Timestamp },
-    // * Master Chain
+    TokenIssued { amount: Amount },
     DebtNotif { debt_id: u64, amount: Amount, created_at: Timestamp },
     TokenPot { amount: Amount },
+    // * User Chain
+    DebtPaid { debt_id: u64, amount: Amount, paid_at: Timestamp },
+    // * Master Chain
+    TokenUpdate { amount: Amount },
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
@@ -58,6 +60,12 @@ pub struct BankrollParameters {
 pub struct DailyBonus {
     pub amount: Amount,
     pub last_claim: Timestamp,
+}
+
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize, SimpleObject)]
+pub struct PublicChainBalances {
+    pub chain: ChainId,
+    pub amount: Amount,
 }
 
 impl DailyBonus {

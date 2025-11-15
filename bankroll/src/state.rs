@@ -1,5 +1,5 @@
-use bankroll::{DailyBonus, DebtRecord, TokenPotRecord};
-use linera_sdk::linera_base_types::{AccountOwner, Amount};
+use bankroll::{DailyBonus, DebtRecord, PublicChainBalances, TokenPotRecord};
+use linera_sdk::linera_base_types::{AccountOwner, Amount, ChainId};
 use linera_sdk::views::{linera_views, MapView, RegisterView, RootView, ViewStorageContext};
 
 #[derive(RootView, async_graphql::SimpleObject)]
@@ -13,4 +13,6 @@ pub struct BankrollState {
     // User Chain
     pub daily_bonus: RegisterView<DailyBonus>,
     pub accounts: MapView<AccountOwner, Amount>,
+    // Master Chain
+    pub balances: MapView<ChainId, PublicChainBalances>,
 }

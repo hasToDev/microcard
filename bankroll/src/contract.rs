@@ -3,7 +3,7 @@
 mod state;
 
 use self::state::BankrollState;
-use bankroll::{BankrollMessage, BankrollOperation, BankrollParameters, BankrollResponse, DebtRecord, DebtStatus, TokenPotRecord};
+use bankroll::{BankrollMessage, BankrollOperation, BankrollParameters, BankrollResponse, DebtRecord, DebtStatus, PublicChainBalances, TokenPotRecord};
 use linera_sdk::linera_base_types::ChainId;
 use linera_sdk::{
     linera_base_types::WithContractAbi,
@@ -132,8 +132,14 @@ impl Contract for BankrollContract {
                     amount,
                     chain_id
                 );
-                self.message_manager(chain_id, BankrollMessage::ReceivedToken { amount });
-                log::info!("Sent ReceivedToken message to chain: {:?}, amount: {}", chain_id, amount);
+                self.message_manager(chain_id, BankrollMessage::TokenIssued { amount });
+                log::info!("Sent TokenIssued message to chain: {:?}, amount: {}", chain_id, amount);
+
+                let data = PublicChainBalances { chain: chain_id, amount };
+                self.state.balances.insert(&chain_id, data).unwrap_or_else(|_| {
+                    panic!("Failed to update record for Public Chain ID: {}", chain_id);
+                });
+
                 BankrollResponse::Ok
             }
         }
@@ -144,10 +150,10 @@ impl Contract for BankrollContract {
 
         match message {
             // * Public Chain
-            BankrollMessage::ReceivedToken { amount } => {
-                log::info!("\n\nBankrollMessage::ReceivedToken");
+            BankrollMessage::TokenIssued { amount } => {
+                log::info!("\n\nBankrollMessage::TokenIssued");
                 log::info!(
-                    "BankrollMessage::ReceivedToken from {:?} at {:?}, amount: {}",
+                    "BankrollMessage::TokenIssued from {:?} at {:?}, amount: {}",
                     origin_chain_id,
                     self.runtime.chain_id(),
                     amount
@@ -205,6 +211,10 @@ impl Contract for BankrollContract {
                 self.state.debt_log.insert(&debt_id, debt_record.clone()).unwrap_or_else(|_| {
                     panic!("Failed to create debt record for debt_id: {}", debt_id);
                 });
+
+                // Update current balance to Master Chain
+                let master_chain = self.runtime.application_parameters().master_chain;
+                self.message_manager(master_chain, BankrollMessage::TokenUpdate { amount: remaining_token });
             }
             BankrollMessage::TokenPot { amount } => {
                 log::info!("\n\nBankrollMessage::TokenPot");
@@ -234,6 +244,11 @@ impl Contract for BankrollContract {
                 });
 
                 log::info!("Token pot received. New total tokens: {}. Pot record created: {:?}", current_token, pot_record);
+
+                // Update current balance to Master Chain
+                let master_chain = self.runtime.application_parameters().master_chain;
+                let amount = *current_token;
+                self.message_manager(master_chain, BankrollMessage::TokenUpdate { amount });
             }
             // * User Chain
             BankrollMessage::DebtPaid { debt_id, amount, paid_at } => {
@@ -263,6 +278,26 @@ impl Contract for BankrollContract {
                 });
 
                 log::info!("Debt {} successfully updated to Paid status", debt_id);
+            }
+            // * Master Chain
+            BankrollMessage::TokenUpdate { amount } => {
+                log::info!("\n\nBankrollMessage::TokenUpdate");
+                log::info!(
+                    "BankrollMessage::TokenUpdate from {:?} amount: {} at {:?}",
+                    origin_chain_id,
+                    amount,
+                    self.runtime.chain_id()
+                );
+
+                // TODO: verify that origin_chain_id is a Public Chain
+
+                let data = PublicChainBalances {
+                    chain: origin_chain_id,
+                    amount,
+                };
+                self.state.balances.insert(&origin_chain_id, data).unwrap_or_else(|_| {
+                    panic!("Failed to update record for Public Chain ID: {}", origin_chain_id);
+                });
             }
         }
     }
