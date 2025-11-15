@@ -19,6 +19,9 @@ use linera_sdk::{
 const ONE_MINUTE_DURATION_IN_MICROS: u64 = 60 * 1_000_000;
 const TWO_MINUTES_DURATION_IN_MICROS: u64 = 120 * 1_000_000;
 
+const MINIMUM_BLACKJACK_DECK: u64 = 80;
+const REFILL_BLACKJACK_DECK_COUNT: u64 = 364;
+
 pub struct BlackjackContract {
     state: BlackjackState,
     runtime: ContractRuntime<Self>,
@@ -149,6 +152,7 @@ impl Contract for BlackjackContract {
                         }
                         log::info!("DealBet SinglePlayerGame");
                         let outcome = self.deal_draw_single_player().await;
+                        self.check_deck_single_player().await;
 
                         // Handle outcome based on initial deal
                         match outcome {
@@ -187,6 +191,7 @@ impl Contract for BlackjackContract {
                         }
                         log::info!("Hit SinglePlayerGame");
                         let outcome = self.hit_single_player().await;
+                        self.check_deck_single_player().await;
 
                         // call handler based on outcome
                         match outcome {
@@ -225,6 +230,7 @@ impl Contract for BlackjackContract {
                         }
                         log::info!("Stand SinglePlayerGame");
                         let outcome = self.stand_single_player().await;
+                        self.check_deck_single_player().await;
 
                         // call handler based on outcome
                         match outcome {
@@ -460,6 +466,28 @@ impl BlackjackContract {
         new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
         new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
         BlackjackGame::new(Deck::with_cards(new_card_stack))
+    }
+    fn refill_deck(&mut self) -> Vec<u8> {
+        let mut new_card_stack = get_new_deck(self.runtime.system_time().to_string());
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack.append(&mut get_new_deck(self.runtime.system_time().to_string()));
+        new_card_stack
+    }
+    async fn check_deck_single_player(&mut self) {
+        let deck_count = self.state.single_player_game.get().count;
+
+        // Ensure deck has enough cards
+        if deck_count < MINIMUM_BLACKJACK_DECK {
+            let mut refill_deck = self.refill_deck();
+            let current_time = self.runtime.system_time().to_string();
+            let single_player_game = self.state.single_player_game.get_mut();
+            single_player_game.deck.add_cards(&mut refill_deck, current_time);
+            single_player_game.count = single_player_game.count.saturating_add(REFILL_BLACKJACK_DECK_COUNT);
+        }
     }
     fn update_profile_balance_and_bet_data(&mut self) {
         log::info!("Updating profile balance and bet data");
