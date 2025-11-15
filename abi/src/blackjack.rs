@@ -146,20 +146,19 @@ impl BlackjackGame {
     }
 
     pub fn data_for_event(&self) -> Self {
-        // hide dealer hand until BlackjackStatus::Ended
-        // TODO: enable this later, being disabled for debug
-        // if self.status != BlackjackStatus::Ended {
-        //     return BlackjackGame {
-        //         sequence: self.sequence,
-        //         dealer: Dealer::empty(),
-        //         players: self.players.clone(),
-        //         deck: Deck::empty(),
-        //         pot: self.pot,
-        //         active_seat: self.active_seat,
-        //         status: self.status.clone(),
-        //         time_limit: self.time_limit,
-        //     };
-        // }
+        if self.status != BlackjackStatus::RoundEnded {
+            return BlackjackGame {
+                sequence: self.sequence,
+                dealer: self.dealer.hide_last_card(),
+                players: self.players.clone(),
+                deck: Deck::empty(),
+                count: self.count,
+                pot: self.pot,
+                active_seat: self.active_seat,
+                status: self.status.clone(),
+                time_limit: self.time_limit,
+            };
+        }
 
         BlackjackGame {
             sequence: self.sequence,

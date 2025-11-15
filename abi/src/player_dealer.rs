@@ -67,4 +67,12 @@ impl Dealer {
     pub fn empty() -> Self {
         Dealer { hand: vec![] }
     }
+
+    pub fn hide_last_card(&self) -> Self {
+        let mut new_hand = self.hand.clone();
+        if let Some(last) = new_hand.last_mut() {
+            *last = 0;
+        }
+        Dealer { hand: new_hand }
+    }
 }
