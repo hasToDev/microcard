@@ -570,7 +570,10 @@ impl BlackjackContract {
         if user_profile.balance.eq(&Amount::ZERO) || user_profile.balance.lt(&bet_data.min_bet) {
             panic!("not enough Player balance");
         }
-        if amount.lt(&bet_data.min_bet) {
+        if amount.lt(&Amount::ZERO) {
+            panic!("negative bet isn't allowed");
+        }
+        if amount.gt(&Amount::ZERO) && amount.lt(&bet_data.min_bet) {
             panic!("minimum bet is {:?}", bet_data.min_bet);
         }
         if amount.gt(&bet_data.max_bet) {
@@ -592,7 +595,7 @@ impl BlackjackContract {
         single_player_game.sequence = single_player_game.sequence.saturating_add(1);
 
         let player = single_player_game.players.get_mut(&seat_id).expect("Player not found in single player game");
-        player.add_bet(amount, user_profile.balance);
+        player.update_bet(amount, user_profile.balance);
 
         // Update player in player_seat_map
         self.state.player_seat_map.insert(&seat_id, player.clone()).unwrap_or_else(|_| {
@@ -779,7 +782,7 @@ impl BlackjackContract {
 
     // Handle player win (hand value = 21)
     async fn handle_player_win(&mut self) {
-        log::info!("Player wins with 21!");
+        log::info!("Player wins!");
 
         let profile = self.state.profile.get();
         let seat_id = profile.seat.expect("Player seat not found");
