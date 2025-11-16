@@ -135,6 +135,15 @@ The easiest way to get started is using Docker:
 
 5. Open your browser and navigate to [http://localhost:5173](http://localhost:5173) to play the game.
 
+Complete command:
+
+```bash
+git clone https://github.com/hasToDev/microcard.git
+cd microcard
+docker compose up -d --build
+docker compose logs -f blackjack
+```
+
 ## Game Mechanics
 
 ### Daily Bonus System
