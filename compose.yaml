@@ -1,5 +1,5 @@
 services:
-  app:
+  blackjack:
     build: .
     ports:
       - "5173:5173" # Web app

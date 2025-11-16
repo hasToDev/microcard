@@ -19,6 +19,8 @@ PLAY_CHAIN_AMOUNT_FOR_EACH_PUBLIC_CHAIN=1
 LINERA_TMP_DIR=/home/hasto/.config/linera
 TOKEN_AMOUNT_TO_MINT=1000000000
 
+LINERA_SERVICE_PORT=8081
+
 # ----------------------------------------------------------
 # Clear current wallet
 # ----------------------------------------------------------
@@ -194,7 +196,7 @@ done
 # Run Node Service in the background
 # ----------------------------------------------------------
 
-linera service --port 8081 &
+linera service --port $LINERA_SERVICE_PORT &
 SERVICE_PID=$!
 
 sleep 3
@@ -265,6 +267,7 @@ kill $SERVICE_PID
 # ------------------------------------------------------------
 # Show Bankroll App ID, BlackJack App ID, Default Chain ID, User Chain ID
 # ------------------------------------------------------------
+echo ""
 echo "BLACKJACK APP ID:"
 echo "$BLACK_JACK_APP_ID"
 echo ""
@@ -304,6 +307,43 @@ echo ""
 echo "USER 7: $USER_CHAIN_ID_7"
 echo ""
 echo "USER 8: $USER_CHAIN_ID_8"
+echo ""
+
+# -----------------------------------------------------------------------------------------------------------------
+# Generate config.json for frontend
+# -----------------------------------------------------------------------------------------------------------------
+
+echo "Generating config.json for frontend..."
+
+jq -n \
+  --arg nodeServiceURL "$GRAPHQL_URL" \
+  --arg blackjackAppId "$BLACK_JACK_APP_ID" \
+  --arg bankrollAppId "$BANKROLL_APP_ID" \
+  --arg conwayDefaultChain "$DEFAULT_CHAIN_ID" \
+  --arg conwayUserChain1 "$USER_CHAIN_ID" \
+  --arg conwayUserChain2 "$USER_CHAIN_ID_2" \
+  --arg conwayUserChain3 "$USER_CHAIN_ID_3" \
+  --arg conwayUserChain4 "$USER_CHAIN_ID_4" \
+  --arg conwayUserChain5 "$USER_CHAIN_ID_5" \
+  --arg conwayUserChain6 "$USER_CHAIN_ID_6" \
+  --arg conwayUserChain7 "$USER_CHAIN_ID_7" \
+  --arg conwayUserChain8 "$USER_CHAIN_ID_8" \
+  '{
+    nodeServiceURL: $nodeServiceURL,
+    blackjackAppId: $blackjackAppId,
+    bankrollAppId: $bankrollAppId,
+    conwayDefaultChain: $conwayDefaultChain,
+    conwayUserChain1: $conwayUserChain1,
+    conwayUserChain2: $conwayUserChain2,
+    conwayUserChain3: $conwayUserChain3,
+    conwayUserChain4: $conwayUserChain4,
+    conwayUserChain5: $conwayUserChain5,
+    conwayUserChain6: $conwayUserChain6,
+    conwayUserChain7: $conwayUserChain7,
+    conwayUserChain8: $conwayUserChain8
+  }' > "frontend/web/config.json"
+
+echo "✓ config.json created at frontend/web/config.json"
 echo ""
 
 end=$(date +%s%3N)

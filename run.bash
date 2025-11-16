@@ -5,16 +5,13 @@
 
 set -eu
 
-#eval "$(linera net helper)"
-#linera_spawn linera net up --with-faucet
-#
-#export LINERA_FAUCET_URL=http://localhost:8080
-#linera wallet init --faucet="$LINERA_FAUCET_URL"
-#linera wallet request-chain --faucet="$LINERA_FAUCET_URL"
+FAUCET_PORT=8080
+LINERA_SERVICE_PORT=8081
+FLUTTER_WEB_PORT=5173
 
 export PATH="$PWD/target/debug:$PATH"
 source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
-linera_spawn linera net up --initial-amount 1000000000000 --with-faucet --faucet-port 8080 --faucet-amount 1000000000
+linera_spawn linera net up --initial-amount 1000000000000 --with-faucet --faucet-port $FAUCET_PORT --faucet-amount 1000000000
 
 # -----------------------------------------------------------------------------------------------------------------
 # Build and publish your backend
@@ -22,6 +19,7 @@ linera_spawn linera net up --initial-amount 1000000000000 --with-faucet --faucet
 
 FAUCET_URL=http://localhost:8080
 GRAPHQL_URL=http://localhost:8081
+
 PUBLIC_CHAIN_AMOUNT=1
 PLAY_CHAIN_AMOUNT_FOR_EACH_PUBLIC_CHAIN=1
 TOKEN_AMOUNT_TO_MINT=1000000000
@@ -194,7 +192,7 @@ done
 # Run Node Service in the background
 # ----------------------------------------------------------
 
-linera service --port 8081 &
+linera service --port $LINERA_SERVICE_PORT &
 SERVICE_PID=$!
 
 sleep 3
@@ -297,3 +295,16 @@ echo ""
 # Build and run your frontend, if any
 # -----------------------------------------------------------------------------------------------------------------
 
+echo "Starting web server on port 5173..."
+cd frontend/web
+npx http-server . -p $FLUTTER_WEB_PORT --cors -c0 --no-dotfiles
+
+# -----------------------------------------------------------------------------------------------------------------
+# Blackjack is READY
+# -----------------------------------------------------------------------------------------------------------------
+
+echo "-----------------------------------------------------------"
+echo ""
+echo "Blackjack on Microchains READY! | visit http://localhost:5173 to play"
+echo ""
+echo "-----------------------------------------------------------"
