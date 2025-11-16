@@ -159,6 +159,12 @@ docker compose logs -f blackjack
 - Balance validation before placing bets
 - Cross-application balance management with Bankroll
 
+### Deck System
+
+- The game starts with **8 decks** in the card stack
+- When the number of cards falls below **80**, the system automatically adds **7 new decks** to the stack
+- This ensures continuous gameplay without interruption
+
 ### Multi-Player Games
 
 - Up to **3 players** per table (`MAX_BLACKJACK_PLAYERS`)
