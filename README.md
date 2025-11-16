@@ -52,26 +52,39 @@ The project is organized as a Cargo workspace with three main crates:
 
 ```
 microcard/
-├── abi/              # Shared types and game logic library
-│   ├── bet_chip_profile.rs
-│   ├── blackjack.rs
-│   ├── deck.rs
-│   ├── player_dealer.rs
-│   ├── poker.rs
-│   └── random.rs
-├── bankroll/         # Token management application
-│   ├── contract.rs   # Balance operations, daily bonus
-│   ├── service.rs    # GraphQL query interface
-│   └── state.rs
-├── blackjack/        # Main blackjack game application
-│   ├── contract.rs   # Game operations, chain messaging
-│   ├── service.rs    # GraphQL query and mutation interface
-│   └── state.rs
-├── tests/            # Deployment and test scripts
-│   ├── test_run_single_node.sh
-│   └── test_run_multi_node.sh
-├── Cargo.toml
-└── rust-toolchain.toml
+├── abi/                    # Shared types and game logic library
+│   └── src/
+│       ├── lib.rs
+│       ├── bet_chip_profile.rs
+│       ├── blackjack.rs
+│       ├── deck.rs
+│       ├── player_dealer.rs
+│       ├── poker.rs
+│       └── random.rs
+├── bankroll/               # Token management application
+│   └── src/
+│       ├── lib.rs
+│       ├── contract.rs     # Balance operations, daily bonus
+│       ├── service.rs      # GraphQL query interface
+│       └── state.rs
+├── blackjack/              # Main blackjack game application
+│   └── src/
+│       ├── lib.rs
+│       ├── contract.rs     # Game operations, chain messaging
+│       ├── service.rs      # GraphQL query and mutation interface
+│       └── state.rs
+├── frontend/               # Web frontend (Flutter)
+│   └── web/
+│       ├── index.html
+│       ├── assets/
+│       ├── canvaskit/
+│       └── ...
+├── Dockerfile              # Docker configuration
+├── compose.yaml            # Docker Compose configuration
+├── run.bash                # Deployment script
+├── Makefile                # Build automation
+├── Cargo.toml              # Workspace configuration
+└── rust-toolchain.toml     # Rust version specification
 ```
 
 ### Application Dependencies
@@ -95,226 +108,32 @@ Both depend on:
 └─────────────────────────────────────────────┘
 ```
 
-## Prerequisites
+## Running with Docker
 
-- **Rust**: Version 1.86.0 (specified in `rust-toolchain.toml`)
-- **Linera CLI**: Linera SDK 0.15.4
-- **wasm32-unknown-unknown** target installed
-- **jq**: JSON processor for deployment scripts
-- **Linera local network** running with faucet service
+The easiest way to get started is using Docker:
 
-### Install Rust and Components
+1. Clone this repository and navigate to the folder:
+   ```bash
+   git clone https://github.com/hasToDev/microcard.git
+   cd microcard
+   ```
 
-```bash
-# Install Rust (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+2. Start the application with Docker Compose:
+   ```bash
+   docker compose up -d --build
+   ```
 
-# Add WebAssembly target
-rustup target add wasm32-unknown-unknown
+3. Monitor the logs to ensure the application is ready:
+   ```bash
+   docker compose logs -f blackjack
+   ```
 
-# Install components (done automatically via rust-toolchain.toml)
-rustup component add clippy rustfmt rust-src
-```
+4. Wait until you see the following message in the logs:
+   ```
+   Blackjack on Microchains READY!
+   ```
 
-### Install Linera CLI
-
-Follow the [Linera installation guide](https://linera.io) to install the Linera CLI tools.
-
-## Building the Project
-
-### Build All Packages
-
-```bash
-# Build all workspace members for WebAssembly target
-cargo build --release --target wasm32-unknown-unknown
-```
-
-### Build Specific Packages
-
-```bash
-# Build individual packages
-cargo build -p blackjack --release --target wasm32-unknown-unknown
-cargo build -p bankroll --release --target wasm32-unknown-unknown
-cargo build -p abi --release --target wasm32-unknown-unknown
-```
-
-### Development Commands
-
-```bash
-# Check code without building
-cargo check
-
-# Run clippy for linting
-cargo clippy --target wasm32-unknown-unknown
-
-# Format code
-cargo fmt
-```
-
-## Deployment
-
-> **⚠️ IMPORTANT**: You must deploy applications in the correct order due to dependencies.
-
-### Deployment Order
-
-1. **Deploy Bankroll Application First** (requires Default Chain ID)
-2. **Deploy Blackjack Application Second** (requires Bankroll App ID)
-3. **Configure Play Chains**
-4. **Mint Tokens**
-
-The complete deployment process is automated in `test/test_run_single_node.sh`. Below is a step-by-step guide.
-
-### Step 1: Set Up Linera Local Network
-
-```bash
-# Set up local network with faucet
-export PATH="$PWD/target/debug:$PATH"
-source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
-linera_spawn linera net up \
-  --initial-amount 1000000000000 \
-  --with-faucet \
-  --faucet-port 3131 \
-  --faucet-amount 1000000000
-```
-
-### Step 2: Initialize Wallet
-
-```bash
-# Initialize wallet from faucet
-linera wallet init --faucet http://localhost:3131
-
-# Request default chain
-linera wallet request-chain --faucet http://localhost:3131
-
-# Save default chain ID
-DEFAULT_CHAIN_ID=$(linera wallet show | grep "Public Key" -A 1 | tail -n 1 | awk '{print $2}')
-```
-
-### Step 3: Create Public and Play Chains
-
-```bash
-# Create public chains (for game discovery)
-PUBLIC_CHAIN_1=$(linera wallet request-chain --faucet http://localhost:3131)
-PUBLIC_CHAIN_2=$(linera wallet request-chain --faucet http://localhost:3131)
-
-# Create play chains (for hosting games)
-PLAY_CHAIN_1=$(linera wallet request-chain --faucet http://localhost:3131)
-PLAY_CHAIN_2=$(linera wallet request-chain --faucet http://localhost:3131)
-# ... create more as needed
-```
-
-### Step 4: Deploy Bankroll Application
-
-```bash
-# Deploy bankroll (requires DEFAULT_CHAIN_ID)
-BANKROLL_APP_ID=$(linera --wait-for-outgoing-messages project publish-and-create . bankroll \
-  --json-parameters "{
-    \"master_chain\": \"$DEFAULT_CHAIN_ID\",
-    \"bonus\": \"25000\"
-  }" | grep "Application ID:" | awk '{print $3}')
-
-echo "Bankroll App ID: $BANKROLL_APP_ID"
-```
-
-### Step 5: Deploy Blackjack Application
-
-```bash
-# Deploy blackjack (requires BANKROLL_APP_ID)
-BLACKJACK_APP_ID=$(linera --wait-for-outgoing-messages project publish-and-create . blackjack \
-  --required-application-ids "$BANKROLL_APP_ID" \
-  --json-argument "10000" \
-  --json-parameters "{
-    \"master_chain\": \"$DEFAULT_CHAIN_ID\",
-    \"public_chains\": [\"$PUBLIC_CHAIN_1\", \"$PUBLIC_CHAIN_2\"],
-    \"bankroll\": \"$BANKROLL_APP_ID\"
-  }" | grep "Application ID:" | awk '{print $3}')
-
-echo "Blackjack App ID: $BLACKJACK_APP_ID"
-```
-
-### Step 6: Start Linera Service
-
-```bash
-# Start node service in background
-linera service --port 8081 &
-```
-
-### Step 7: Configure Play Chains
-
-```bash
-# Add play chains to public chains via GraphQL
-GRAPHQL_URL="http://localhost:8081"
-
-# Add each play chain to each public chain
-curl -X POST "$GRAPHQL_URL/chains/$DEFAULT_CHAIN_ID/applications/$BLACKJACK_APP_ID" \
-  -H "Content-Type: application/json" \
-  -d "{\"query\":\"mutation { addPlayChain(targetPublicChain: \\\"$PUBLIC_CHAIN_1\\\", playChainId: \\\"$PLAY_CHAIN_1\\\") }\"}"
-```
-
-### Step 8: Mint Tokens
-
-```bash
-# Mint tokens to public chains (1 billion tokens each)
-curl -X POST "$GRAPHQL_URL/chains/$DEFAULT_CHAIN_ID/applications/$BLACKJACK_APP_ID" \
-  -H "Content-Type: application/json" \
-  -d "{\"query\":\"mutation { mintToken(chainId: \\\"$PUBLIC_CHAIN_1\\\", amount: \\\"1000000000\\\") }\"}"
-```
-
-### Automated Deployment
-
-For a complete automated deployment, use the provided script:
-
-```bash
-./test/test_run_single_node.sh \
-  http://localhost:3131 \     # FAUCET_URL
-  http://localhost:8081 \     # GRAPHQL_URL
-  http://localhost:8081       # LOCAL_NETWORK_URL
-```
-
-This script will:
-
-- Initialize a wallet
-- Create default, user, public, and play chains
-- Deploy both Bankroll and Blackjack applications in the correct order
-- Configure play chains
-- Mint tokens
-- Output all important IDs for testing
-
-## Testing
-
-### Single-Node Test
-
-Test the complete deployment on a single node:
-
-```bash
-# Set up local network
-source /dev/stdin <<<"$(linera net helper 2>/dev/null)"
-linera_spawn linera net up --initial-amount 1000000000000 \
-  --with-faucet --faucet-port 3131 --faucet-amount 1000000000
-
-# Run deployment test
-./test/test_run_single_node.sh \
-  http://localhost:3131 \
-  http://localhost:8081 \
-  http://localhost:8081
-```
-
-### Multi-Node Test
-
-Test with multiple players across different nodes:
-
-```bash
-./test/test_run_multi_node.sh \
-  http://localhost:3131 \
-  http://localhost:8081 \
-  http://localhost:8081
-```
-
-This creates three wallet services:
-
-- Default wallet (port 8081)
-- Player A wallet (port 8082)
-- Player B wallet (port 8083)
+5. Open your browser and navigate to [http://localhost:5173](http://localhost:5173) to play the game.
 
 ## Game Mechanics
 
@@ -344,27 +163,41 @@ This creates three wallet services:
 - No need to find or join a play chain
 - Instant game start and betting
 
+## Single Player Game Flow
+
+The single-player game follows this flow:
+
+1. **Start Game**: Player launches the Blackjack application
+2. **Balance Check**: The Blackjack app calls the Bankroll application to:
+    - Retrieve the latest balance
+    - Automatically claim daily rewards if available
+3. **Place Bet**: Player places their bet using the available balance
+4. **Deal Cards**: When the player deals:
+    - The bet amount is deducted from the player's balance
+    - Tokens are moved into a blackjack token pool
+5. **Game Outcomes**:
+    - **Player Loses**: Tokens from the pool are transferred to the Public chain via the Bankroll app
+    - **Draw**: Tokens from the pool are returned to the player's balance
+    - **Player Wins**:
+        - The Bankroll app creates a Debt Record
+        - The Debt Record is sent to the Public chain for processing
+        - The Public chain sends tokens from its own pool to settle the debt
+        - All debt settlement happens automatically in the smart contract
+        - Players can continue playing without manual intervention
+
 ## Project Status
 
 This project is actively developed and demonstrates Linera's multi-chain capabilities. It includes:
 
 - ✅ Single-player blackjack
-- ✅ Multi-player blackjack (up to 3 players)
 - ✅ Token-based betting system
 - ✅ Daily bonus rewards
 - ✅ Real-time game state updates
 - ✅ Cross-application messaging
 - ✅ GraphQL API
-- ✅ Automated deployment scripts
-- ✅ Multi-node testing
-
-## License
-
--
-
-## Contributing
-
--
+- 🚧 Multi-player blackjack (under development)
+- 🚧 Leaderboard (under development)
+- 🚧 Prediction (under development)
 
 ## Support
 
