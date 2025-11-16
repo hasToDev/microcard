@@ -1,0 +1,10 @@
+query GetPlayerStatus(
+    $name: String!,
+) {
+    getPlayerStatus (
+        name: $name,
+    ) {
+        gid
+        time
+    }
+}

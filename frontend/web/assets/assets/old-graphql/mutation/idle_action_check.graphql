@@ -1,0 +1,7 @@
+mutation IdleActionCheck(
+    $playerId: String!,
+) {
+    idleActionCheck (
+        playerId: $playerId,
+    )
+}

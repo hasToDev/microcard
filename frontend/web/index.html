@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!--
+      If you are serving your web app in a path other than the root, change the
+      href value below to reflect the base path you are serving from.
+
+      The path provided below has to start and end with a slash "/" in order for
+      it to work correctly.
+
+      For more details:
+      * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+      This is a placeholder for base href that will be replaced by the value of
+      the `--base-href` argument provided to `flutter build`.
+    -->
+    <!--  <base href="/">-->
+    <base href="/">
+
+    <meta charset="UTF-8">
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+    <meta name="description"
+          content="Discover the future of Blackjack with our innovative on-chain gaming platform, built on the secure, fast, and efficient Linera's microchains.">
+
+    <!-- iOS meta tags & icons -->
+    <!-- <meta name="apple-mobile-web-app-capable" content="yes"> -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="BlackJack on Microchains">
+    <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favicon.png"/>
+
+    <!-- Linera Font -->
+    <style>
+        @font-face {
+            font-family: 'Orbitron';
+            /* src: url('flutter_web_load/black_jack_app/web/fonts/Orbitron-Bold.ttf') format('truetype'); USE THIS PATH FOR TEST PURPOSE*/
+            src: url('fonts/Orbitron-Bold.ttf') format('truetype');
+        }
+    </style>
+
+    <title>BlackJack on Microchains</title>
+    <link rel="manifest" href="manifest.json">
+</head>
+<body style="overflow: hidden"
+      onload="setTimeout(function() {window.scrollTo(0,1)},100)">
+<div class="loader-text" id="loading-text">powered by Linera</div>
+<div class="loader" id="loading">
+    <style>
+        body {
+            background-color: #FFEFEB;
+        }
+
+        .loader-text {
+            color: #FF2A00;
+            height: 90px;
+            width: 220px;
+            font-size: 20px;
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            /* center CSS box */
+            margin: auto;
+            left: 0;
+            right: 0;
+            top: 35px;
+            bottom: 0;
+            position: fixed;
+        }
+
+        .loader {
+            width: 220px;
+            height: 10px;
+            border-radius: 20px;
+            color: #FF2A00;
+            border: 2px solid;
+            /* center CSS box */
+            margin: auto;
+            left: 0;
+            right: 0;
+            top: 35px;
+            bottom: 0;
+            position: fixed;
+        }
+
+
+        .loader::before {
+            content: "";
+            position: absolute;
+            margin: 2px;
+            inset: 0 100% 0 0;
+            border-radius: inherit;
+            background: currentColor;
+            animation: l6 1.5s infinite;
+        }
+
+        @keyframes l6 {
+            100% {
+                inset: 0
+            }
+        }
+    </style>
+</div>
+<script src="flutter_bootstrap.js?v=200" async></script>
+</body>
+</html>

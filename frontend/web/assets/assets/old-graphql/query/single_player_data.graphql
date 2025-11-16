@@ -1,0 +1,31 @@
+query {
+  singlePlayerData {
+    profile {
+      seat
+      balance
+      betData {
+        minBet
+        maxBet
+        chipset {
+          amount
+          text
+          enable
+        }
+      }
+    }
+    game {
+      sequence
+      dealer {
+        hand
+      }
+      players
+      deck {
+        cards
+      }
+      pot
+      activeSeat
+      status
+      timeLimit
+    }
+  }
+}

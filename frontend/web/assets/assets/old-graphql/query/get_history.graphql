@@ -1,0 +1,12 @@
+query GetHistory(
+    $limit: Int!,
+) {
+    GetHistory (
+        limit: $limit,
+    ) {
+        p1
+        p2
+        winner
+        time
+    }
+}
