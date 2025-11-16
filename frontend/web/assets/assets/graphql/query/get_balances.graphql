@@ -1,0 +1,6 @@
+query GetBalances {
+  getBalances {
+    chain
+    amount
+  }
+}

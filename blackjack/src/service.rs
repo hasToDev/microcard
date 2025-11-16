@@ -66,14 +66,16 @@ impl QueryRoot {
     }
     async fn single_player_data(&self) -> GameData {
         GameData {
+            user_status: self.state.user_status.get().clone(),
             profile: self.state.profile.get().clone(),
-            game: self.state.single_player_game.get().data_for_channel(),
+            game: self.state.single_player_game.get().data_for_event(),
         }
     }
     async fn multi_player_data(&self) -> GameData {
         GameData {
+            user_status: self.state.user_status.get().clone(),
             profile: self.state.profile.get().clone(),
-            game: self.state.channel_game_state.get().data_for_channel(),
+            game: self.state.channel_game_state.get().data_for_event(),
         }
     }
     async fn get_profile(&self) -> Profile {

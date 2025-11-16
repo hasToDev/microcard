@@ -1,0 +1,33 @@
+query MultiPlayerData {
+    multiPlayerData {
+        profile {
+            seat
+            balance
+            betData {
+                minBet
+                maxBet
+                chipset {
+                    amount
+                    text
+                    enable
+                }
+            }
+        }
+        game {
+            sequence
+            dealer {
+                hand
+            }
+            players
+            deck {
+                cards
+            }
+            count
+            pot
+            activeSeat
+            status
+            timeLimit
+        }
+        userStatus
+    }
+}

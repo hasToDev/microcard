@@ -1,0 +1,11 @@
+services:
+  blackjack:
+    build: .
+    ports:
+      - "5173:5173" # Web app
+      - "8080:8080" # faucet
+      - "8081:8081" # GraphQL
+      - "9001:9001" # shard proxy
+      - "13001:13001" # shard
+    volumes:
+      - .:/build

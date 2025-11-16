@@ -1,0 +1,3 @@
+mutation AddPlayChain($targetPublicChain: String!, $playChainId: String!) {
+  addPlayChain(targetPublicChain: $targetPublicChain, playChainId: $playChainId)
+}

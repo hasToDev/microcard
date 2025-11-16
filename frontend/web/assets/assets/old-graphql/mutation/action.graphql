@@ -1,0 +1,9 @@
+mutation Action(
+    $playerId: String!,
+    $action: Int!,
+) {
+    action (
+        playerId: $playerId,
+        action: $action,
+    )
+}

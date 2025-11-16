@@ -1,0 +1,3 @@
+mutation MintToken($chainId: String!, $amount: String!) {
+  mintToken(chainId: $chainId, amount: $amount)
+}

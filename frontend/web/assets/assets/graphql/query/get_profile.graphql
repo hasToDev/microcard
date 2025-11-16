@@ -1,0 +1,15 @@
+query GetProfile {
+  getProfile {
+    seat
+    balance
+    betData {
+      minBet
+      maxBet
+      chipset {
+        amount
+        text
+        enable
+      }
+    }
+  }
+}

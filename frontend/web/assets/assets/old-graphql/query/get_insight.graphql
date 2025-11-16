@@ -1,0 +1,23 @@
+query {
+    getInsight {
+        id
+        gameState {
+            status
+            lastUpdate
+        }
+        pOne {
+            id
+            name
+            win
+            lose
+            play
+        }
+        pTwo {
+            id
+            name
+            win
+            lose
+            play
+        }
+    }
+}

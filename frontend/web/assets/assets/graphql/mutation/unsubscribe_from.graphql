@@ -1,0 +1,3 @@
+mutation UnsubscribeFrom($chainId: String!) {
+  unsubscribeFrom(chainId: $chainId)
+}

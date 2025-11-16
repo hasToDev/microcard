@@ -1,0 +1,19 @@
+query GetPlayData(
+    $playerId: String!,
+) {
+    getPlayData (
+        playerId: $playerId,
+    ) {
+        pOneId
+        pTwoId
+        myCard
+        opponentCard
+        myScore
+        opponentScore
+        playerIdTurn
+        lastAction
+        winner
+        gameState
+        lastUpdate
+    }
+}

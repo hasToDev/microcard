@@ -1,0 +1,3 @@
+mutation SubscribeTo($chainId: String!) {
+  subscribeTo(chainId: $chainId)
+}

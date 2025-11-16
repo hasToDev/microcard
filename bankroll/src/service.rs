@@ -5,7 +5,7 @@ mod state;
 use std::sync::Arc;
 
 use async_graphql::{EmptySubscription, Object, Schema};
-use bankroll::{BankrollOperation, DailyBonus};
+use bankroll::{BankrollOperation, DailyBonus, PublicChainBalances};
 use linera_sdk::{graphql::GraphQLMutationRoot, linera_base_types::WithServiceAbi, views::View, Service, ServiceRuntime};
 
 use self::state::BankrollState;
@@ -57,5 +57,17 @@ struct QueryRoot {
 impl QueryRoot {
     async fn get_daily_bonus(&self) -> DailyBonus {
         self.state.daily_bonus.get().clone()
+    }
+
+    async fn get_balances(&self) -> Vec<PublicChainBalances> {
+        let balances_keys = self.state.balances.indices().await.expect("Failed to read balances keys");
+        let mut data = Vec::new();
+
+        for key in balances_keys.into_iter() {
+            let p = self.state.balances.get(&key).await.expect("Failed to get balances");
+            data.push(p.expect("Failed to get balances"));
+        }
+
+        data
     }
 }

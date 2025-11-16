@@ -1,0 +1,13 @@
+mutation Join(
+    $playerId: String!,
+    $playerName: String!,
+    $version: String!,
+    $gid: String!,
+) {
+    join (
+        playerId: $playerId,
+        playerName: $playerName,
+        version: $version,
+        gid: $gid,
+    )
+}

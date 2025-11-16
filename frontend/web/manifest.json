@@ -1,0 +1,35 @@
+{
+  "name": "BlackJack on Microchains",
+  "short_name": "BlackJack on Microchains",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FF2A00",
+  "theme_color": "#FF2A00",
+  "description": "Discover the future of Blackjack with our innovative on-chain gaming platform, built on the secure, fast, and efficient Linera's microchains.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "icons/Icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/Icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/Icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/Icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

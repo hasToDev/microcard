@@ -1,0 +1,12 @@
+query {
+    getLeaderboard {
+        rank {
+            id
+            name
+            win
+            lose
+            play
+        }
+        count
+    }
+}
