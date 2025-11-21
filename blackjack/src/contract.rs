@@ -131,24 +131,31 @@ impl Contract for BlackjackContract {
                 log::info!("\n\nBlackjackOperation::Bet amount: {}", amount);
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
-                        if self.state.channel_game_state.get().status.ne(&BlackjackStatus::WaitingForBets) {
-                            panic!("game in play, not ready for placing bets, please wait for the next hands");
+                        let game_status = &self.state.event_game_state.get().status;
+                        match game_status {
+                            BlackjackStatus::WaitingForPlayer | BlackjackStatus::PlayerTurn | BlackjackStatus::DealerTurn => {
+                                panic!("game in play, not ready for placing bets, please wait for the next hands");
+                            }
+                            BlackjackStatus::RoundEnded => {
+                                // TODO: prepare necessary thing before starting the next round if any
+                            }
+                            _ => {}
                         }
+
                         log::info!("Bet MultiPlayerGame, amount: {}", amount);
-                        self.player_bet(amount).await;
+                        self.multi_player_player_bet(amount).await;
                     }
                     UserStatus::InSinglePlayerGame => {
                         let game_status = &self.state.single_player_game.get().status;
-                        if game_status.eq(&BlackjackStatus::WaitingForPlayer)
-                            || game_status.eq(&BlackjackStatus::PlayerTurn)
-                            || game_status.eq(&BlackjackStatus::DealerTurn)
-                        {
-                            panic!("game in play, not ready for placing bets, please wait for the next hands");
-                        }
-
-                        if game_status.eq(&BlackjackStatus::RoundEnded) {
-                            self.update_profile_balance_and_bet_data();
-                            self.prepare_next_single_player_bet_round().await;
+                        match game_status {
+                            BlackjackStatus::WaitingForPlayer | BlackjackStatus::PlayerTurn | BlackjackStatus::DealerTurn => {
+                                panic!("game in play, not ready for placing bets, please wait for the next hands");
+                            }
+                            BlackjackStatus::RoundEnded => {
+                                self.update_profile_balance_and_bet_data();
+                                self.prepare_next_single_player_bet_round().await;
+                            }
+                            _ => {}
                         }
 
                         log::info!("Bet SinglePlayerGame, amount: {}", amount);
@@ -428,7 +435,7 @@ impl Contract for BlackjackContract {
                 match event {
                     BlackjackEvent::GameState { game } => {
                         log::info!("\nUser {:?} received new game state:\n {:?}", self.runtime.chain_id(), game);
-                        self.state.channel_game_state.set(game);
+                        self.state.event_game_state.set(game);
                     }
                 }
             }
@@ -651,6 +658,11 @@ impl BlackjackContract {
 
         log::info!("Bet placed successfully for seat_id: {}, amount: {}", seat_id, amount);
     }
+
+    async fn multi_player_player_bet(&mut self, amount: Amount) {
+        // TODO: continue
+    }
+
     async fn deal_draw_single_player(&mut self) -> GameOutcome {
         log::info!("deal_draw_single_player called");
         let profile = self.state.profile.get_mut();

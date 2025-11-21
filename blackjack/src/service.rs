@@ -75,7 +75,7 @@ impl QueryRoot {
         GameData {
             user_status: self.state.user_status.get().clone(),
             profile: self.state.profile.get().clone(),
-            game: self.state.channel_game_state.get().data_for_event(),
+            game: self.state.event_game_state.get().data_for_event(),
         }
     }
     async fn get_profile(&self) -> Profile {
