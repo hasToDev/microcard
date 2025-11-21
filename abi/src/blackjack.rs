@@ -31,6 +31,7 @@ scalar!(MutationReason);
 pub enum MutationReason {
     AddNew = 0,
     Update = 1,
+    Remove = 2,
 }
 
 scalar!(UserStatus);

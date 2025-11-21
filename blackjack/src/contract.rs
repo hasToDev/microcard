@@ -67,8 +67,22 @@ impl Contract for BlackjackContract {
             BlackjackOperation::FindPlayChain {} => {
                 log::info!("\n\nBlackjackOperation::FindPlayChain");
 
-                if self.state.user_status.get().eq(&UserStatus::FindPlayChain) {
-                    panic!("still waiting response from previous FindPlayChain");
+                match self.state.user_status.get() {
+                    UserStatus::FindPlayChain => {
+                        panic!("still waiting response from previous FindPlayChain");
+                    }
+                    UserStatus::InMultiPlayerGame | UserStatus::InSinglePlayerGame => {
+                        panic!("user already in game, FindPlayChain not allowed");
+                    }
+                    UserStatus::RequestingTableSeat => {
+                        panic!("user is requesting table seat, FindPlayChain not allowed");
+                    }
+                    UserStatus::PlayChainFound | UserStatus::RequestTableSeatFail => {
+                        let play_chain_id = self.state.user_play_chain.get().unwrap();
+                        self.message_manager(play_chain_id, BlackjackMessage::Unsubscribe);
+                        self.state.user_play_chain.set(None);
+                    }
+                    _ => {}
                 }
 
                 let chain_id = self.get_public_chain();
@@ -88,12 +102,17 @@ impl Contract for BlackjackContract {
                     panic!("seat_id is invalid, can only be 1-{:?}", MAX_BLACKJACK_PLAYERS);
                 }
 
-                if self.state.user_status.get().eq(&UserStatus::RequestingTableSeat) {
-                    panic!("still waiting response from previous RequestTableSeat");
-                }
-
-                if self.state.user_status.get().eq(&UserStatus::InMultiPlayerGame) {
-                    panic!("user already in game, can't request new seat");
+                match self.state.user_status.get() {
+                    UserStatus::Idle | UserStatus::FindPlayChain | UserStatus::PlayChainUnavailable => {
+                        panic!("please call FindPlayChain first");
+                    }
+                    UserStatus::RequestingTableSeat => {
+                        panic!("still waiting response from previous RequestTableSeat");
+                    }
+                    UserStatus::InMultiPlayerGame | UserStatus::InSinglePlayerGame => {
+                        panic!("user already in game, can't request new seat");
+                    }
+                    _ => {}
                 }
 
                 let balance = self.state.profile.get().balance;
@@ -112,24 +131,31 @@ impl Contract for BlackjackContract {
                 log::info!("\n\nBlackjackOperation::Bet amount: {}", amount);
                 match self.state.user_status.get() {
                     UserStatus::InMultiPlayerGame => {
-                        if self.state.channel_game_state.get().status.ne(&BlackjackStatus::WaitingForBets) {
-                            panic!("game in play, not ready for placing bets, please wait for the next hands");
+                        let game_status = &self.state.event_game_state.get().status;
+                        match game_status {
+                            BlackjackStatus::WaitingForPlayer | BlackjackStatus::PlayerTurn | BlackjackStatus::DealerTurn => {
+                                panic!("game in play, not ready for placing bets, please wait for the next hands");
+                            }
+                            BlackjackStatus::RoundEnded => {
+                                // TODO: prepare necessary thing before starting the next round if any
+                            }
+                            _ => {}
                         }
+
                         log::info!("Bet MultiPlayerGame, amount: {}", amount);
-                        self.player_bet(amount).await;
+                        self.multi_player_player_bet(amount).await;
                     }
                     UserStatus::InSinglePlayerGame => {
                         let game_status = &self.state.single_player_game.get().status;
-                        if game_status.eq(&BlackjackStatus::WaitingForPlayer)
-                            || game_status.eq(&BlackjackStatus::PlayerTurn)
-                            || game_status.eq(&BlackjackStatus::DealerTurn)
-                        {
-                            panic!("game in play, not ready for placing bets, please wait for the next hands");
-                        }
-
-                        if game_status.eq(&BlackjackStatus::RoundEnded) {
-                            self.update_profile_balance_and_bet_data();
-                            self.prepare_next_single_player_bet_round().await;
+                        match game_status {
+                            BlackjackStatus::WaitingForPlayer | BlackjackStatus::PlayerTurn | BlackjackStatus::DealerTurn => {
+                                panic!("game in play, not ready for placing bets, please wait for the next hands");
+                            }
+                            BlackjackStatus::RoundEnded => {
+                                self.update_profile_balance_and_bet_data();
+                                self.prepare_next_single_player_bet_round().await;
+                            }
+                            _ => {}
                         }
 
                         log::info!("Bet SinglePlayerGame, amount: {}", amount);
@@ -409,7 +435,7 @@ impl Contract for BlackjackContract {
                 match event {
                     BlackjackEvent::GameState { game } => {
                         log::info!("\nUser {:?} received new game state:\n {:?}", self.runtime.chain_id(), game);
-                        self.state.channel_game_state.set(game);
+                        self.state.event_game_state.set(game);
                     }
                 }
             }
@@ -632,6 +658,11 @@ impl BlackjackContract {
 
         log::info!("Bet placed successfully for seat_id: {}, amount: {}", seat_id, amount);
     }
+
+    async fn multi_player_player_bet(&mut self, amount: Amount) {
+        // TODO: continue
+    }
+
     async fn deal_draw_single_player(&mut self) -> GameOutcome {
         log::info!("deal_draw_single_player called");
         let profile = self.state.profile.get_mut();
@@ -728,7 +759,7 @@ impl BlackjackContract {
     }
     // * Public Chain
     async fn search_available_play_chain(&mut self) -> Option<ChainId> {
-        for player_number in 0..MAX_BLACKJACK_PLAYERS {
+        for player_number in (0..MAX_BLACKJACK_PLAYERS).rev() {
             // Safely check if the key in play_chain_set exists and the vector is non-empty
             if let Some(vec) = self.state.play_chain_set.get(&(player_number as u8)).await.unwrap_or_default() {
                 log::info!("search_available_play_chain play_chain_set vec len is {:?}", vec.len());
@@ -740,28 +771,48 @@ impl BlackjackContract {
         None
     }
     async fn play_chain_manager(&mut self, chain_id: ChainId, player_number: u8, status: MutationReason) {
-        if status == MutationReason::Update {
+        // REMOVAL PHASE: Remove from old bucket (for Update) or entirely (for Remove)
+        if status == MutationReason::Update || status == MutationReason::Remove {
             // remove chain_id from the current play_chain_set state
             if let Some(old_state) = self.state.play_chain_status.get(&chain_id).await.unwrap_or_default() {
                 let mut vec_data = self.state.play_chain_set.get(&old_state).await.unwrap_or_default().unwrap_or_default();
-                vec_data.retain(|c| c != &chain_id);
+
+                // Optimized removal: find position and remove single element
+                // More efficient than retain() which iterates entire vector to filter
+                if let Some(pos) = vec_data.iter().position(|c| c == &chain_id) {
+                    vec_data.remove(pos);
+                }
+
                 self.state.play_chain_set.insert(&old_state, vec_data).unwrap_or_else(|_| {
                     panic!("Failed to update Play Chain Set for {:?}", chain_id);
                 });
             }
         }
 
-        // add chain_id to the new play_chain_set state
-        let mut vec_data = self.state.play_chain_set.get(&player_number).await.unwrap_or_default().unwrap_or_default();
-        vec_data.push(chain_id);
-        self.state.play_chain_set.insert(&player_number, vec_data).unwrap_or_else(|_| {
-            panic!("Failed to update Play Chain Set for {:?}", chain_id);
-        });
+        // ADDITION PHASE: Add to new bucket (skip for Remove)
+        if status != MutationReason::Remove {
+            // add chain_id to the new play_chain_set state
+            let mut vec_data = self.state.play_chain_set.get(&player_number).await.unwrap_or_default().unwrap_or_default();
 
-        // update chain_id status on the play_chain_status
-        self.state.play_chain_status.insert(&chain_id, player_number).unwrap_or_else(|_| {
-            panic!("Failed to update Play Chain Status for {:?}", chain_id);
-        });
+            // Defensive check: prevent duplicate entries
+            if !vec_data.contains(&chain_id) {
+                vec_data.push(chain_id);
+            }
+
+            self.state.play_chain_set.insert(&player_number, vec_data).unwrap_or_else(|_| {
+                panic!("Failed to update Play Chain Set for {:?}", chain_id);
+            });
+
+            // update chain_id status on the play_chain_status
+            self.state.play_chain_status.insert(&chain_id, player_number).unwrap_or_else(|_| {
+                panic!("Failed to update Play Chain Status for {:?}", chain_id);
+            });
+        } else {
+            // Remove case: delete chain from status tracking entirely
+            self.state.play_chain_status.remove(&chain_id).unwrap_or_else(|_| {
+                panic!("Failed to remove Play Chain Status for {:?}", chain_id);
+            });
+        }
     }
 
     // Hit operation: deal one card to player and calculate hand value
