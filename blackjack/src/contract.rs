@@ -728,7 +728,7 @@ impl BlackjackContract {
     }
     // * Public Chain
     async fn search_available_play_chain(&mut self) -> Option<ChainId> {
-        for player_number in 0..MAX_BLACKJACK_PLAYERS {
+        for player_number in (0..MAX_BLACKJACK_PLAYERS).rev() {
             // Safely check if the key in play_chain_set exists and the vector is non-empty
             if let Some(vec) = self.state.play_chain_set.get(&(player_number as u8)).await.unwrap_or_default() {
                 log::info!("search_available_play_chain play_chain_set vec len is {:?}", vec.len());
@@ -740,28 +740,48 @@ impl BlackjackContract {
         None
     }
     async fn play_chain_manager(&mut self, chain_id: ChainId, player_number: u8, status: MutationReason) {
-        if status == MutationReason::Update {
+        // REMOVAL PHASE: Remove from old bucket (for Update) or entirely (for Remove)
+        if status == MutationReason::Update || status == MutationReason::Remove {
             // remove chain_id from the current play_chain_set state
             if let Some(old_state) = self.state.play_chain_status.get(&chain_id).await.unwrap_or_default() {
                 let mut vec_data = self.state.play_chain_set.get(&old_state).await.unwrap_or_default().unwrap_or_default();
-                vec_data.retain(|c| c != &chain_id);
+
+                // Optimized removal: find position and remove single element
+                // More efficient than retain() which iterates entire vector to filter
+                if let Some(pos) = vec_data.iter().position(|c| c == &chain_id) {
+                    vec_data.remove(pos);
+                }
+
                 self.state.play_chain_set.insert(&old_state, vec_data).unwrap_or_else(|_| {
                     panic!("Failed to update Play Chain Set for {:?}", chain_id);
                 });
             }
         }
 
-        // add chain_id to the new play_chain_set state
-        let mut vec_data = self.state.play_chain_set.get(&player_number).await.unwrap_or_default().unwrap_or_default();
-        vec_data.push(chain_id);
-        self.state.play_chain_set.insert(&player_number, vec_data).unwrap_or_else(|_| {
-            panic!("Failed to update Play Chain Set for {:?}", chain_id);
-        });
+        // ADDITION PHASE: Add to new bucket (skip for Remove)
+        if status != MutationReason::Remove {
+            // add chain_id to the new play_chain_set state
+            let mut vec_data = self.state.play_chain_set.get(&player_number).await.unwrap_or_default().unwrap_or_default();
 
-        // update chain_id status on the play_chain_status
-        self.state.play_chain_status.insert(&chain_id, player_number).unwrap_or_else(|_| {
-            panic!("Failed to update Play Chain Status for {:?}", chain_id);
-        });
+            // Defensive check: prevent duplicate entries
+            if !vec_data.contains(&chain_id) {
+                vec_data.push(chain_id);
+            }
+
+            self.state.play_chain_set.insert(&player_number, vec_data).unwrap_or_else(|_| {
+                panic!("Failed to update Play Chain Set for {:?}", chain_id);
+            });
+
+            // update chain_id status on the play_chain_status
+            self.state.play_chain_status.insert(&chain_id, player_number).unwrap_or_else(|_| {
+                panic!("Failed to update Play Chain Status for {:?}", chain_id);
+            });
+        } else {
+            // Remove case: delete chain from status tracking entirely
+            self.state.play_chain_status.remove(&chain_id).unwrap_or_else(|_| {
+                panic!("Failed to remove Play Chain Status for {:?}", chain_id);
+            });
+        }
     }
 
     // Hit operation: deal one card to player and calculate hand value
