@@ -67,8 +67,22 @@ impl Contract for BlackjackContract {
             BlackjackOperation::FindPlayChain {} => {
                 log::info!("\n\nBlackjackOperation::FindPlayChain");
 
-                if self.state.user_status.get().eq(&UserStatus::FindPlayChain) {
-                    panic!("still waiting response from previous FindPlayChain");
+                match self.state.user_status.get() {
+                    UserStatus::FindPlayChain => {
+                        panic!("still waiting response from previous FindPlayChain");
+                    }
+                    UserStatus::InMultiPlayerGame | UserStatus::InSinglePlayerGame => {
+                        panic!("user already in game, FindPlayChain not allowed");
+                    }
+                    UserStatus::RequestingTableSeat => {
+                        panic!("user is requesting table seat, FindPlayChain not allowed");
+                    }
+                    UserStatus::PlayChainFound | UserStatus::RequestTableSeatFail => {
+                        let play_chain_id = self.state.user_play_chain.get().unwrap();
+                        self.message_manager(play_chain_id, BlackjackMessage::Unsubscribe);
+                        self.state.user_play_chain.set(None);
+                    }
+                    _ => {}
                 }
 
                 let chain_id = self.get_public_chain();
@@ -88,12 +102,17 @@ impl Contract for BlackjackContract {
                     panic!("seat_id is invalid, can only be 1-{:?}", MAX_BLACKJACK_PLAYERS);
                 }
 
-                if self.state.user_status.get().eq(&UserStatus::RequestingTableSeat) {
-                    panic!("still waiting response from previous RequestTableSeat");
-                }
-
-                if self.state.user_status.get().eq(&UserStatus::InMultiPlayerGame) {
-                    panic!("user already in game, can't request new seat");
+                match self.state.user_status.get() {
+                    UserStatus::Idle | UserStatus::FindPlayChain | UserStatus::PlayChainUnavailable => {
+                        panic!("please call FindPlayChain first");
+                    }
+                    UserStatus::RequestingTableSeat => {
+                        panic!("still waiting response from previous RequestTableSeat");
+                    }
+                    UserStatus::InMultiPlayerGame | UserStatus::InSinglePlayerGame => {
+                        panic!("user already in game, can't request new seat");
+                    }
+                    _ => {}
                 }
 
                 let balance = self.state.profile.get().balance;
